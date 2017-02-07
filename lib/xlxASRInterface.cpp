@@ -32,6 +32,7 @@
 #include "xlSmartController.h"
 #include "xlxConfig.h"
 #include "ParticleSoftSerial.h"
+#include "xliPinMap.h"
 
 #define ASR_TXCMD_PREFIX          0xbb
 #define ASR_RXCMD_PREFIX          0xaa
