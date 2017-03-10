@@ -210,10 +210,10 @@ AlarmID_t TimeAlarmsClass::alarmRepeat(time_t value, OnTick_t onTickHandler){ //
       if(isAllocated(ID))
       {
         Alarm[ID].Mode.isEnabled = false;
-    	Alarm[ID].Mode.alarmType = dtNotAllocated;
+        Alarm[ID].Mode.alarmType = dtNotAllocated;
         Alarm[ID].onTickHandler = 0;
-    	Alarm[ID].value = 0;
-    	Alarm[ID].nextTrigger = 0;
+        Alarm[ID].value = 0;
+        Alarm[ID].nextTrigger = 0;
       }
     }
 

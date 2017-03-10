@@ -33,8 +33,8 @@
 
 #include "Adafruit_DHT.h"
 #include "ArduinoJson.h"
-#include "LightSensor.h"
-#include "MotionSensor.h"
+//#include "LightSensor.h"
+//#include "MotionSensor.h"
 #include "TimeAlarms.h"
 
 //------------------------------------------------------------------
@@ -44,17 +44,17 @@
 SmartControllerClass theSys;
 
 DHT senDHT(PIN_SEN_DHT, SEN_TYPE_DHT);
-LightSensor senLight(PIN_SEN_LIGHT);
-MotionSensor senMotion(PIN_SEN_PIR);
+//LightSensor senLight(PIN_SEN_LIGHT);
+//MotionSensor senMotion(PIN_SEN_PIR);
 
 //------------------------------------------------------------------
 // Alarm Triggered Actions
 //------------------------------------------------------------------
 void AlarmTimerTriggered(uint32_t tag)
 {
+	if( tag == 255 ) return;
 	uint8_t rule_uid = (uint8_t)tag;
 	SERIAL_LN("Rule %u Alarm Triggered", rule_uid);
-
 
 	//search Rule table for matching UID
 	ListNode<RuleRow_t> *RuleRowptr = theSys.Rule_table.search(rule_uid);
@@ -64,32 +64,8 @@ void AlarmTimerTriggered(uint32_t tag)
 		return;
 	}
 
-	// read UIDs from Rule row
-	uint8_t SNT_uid = RuleRowptr->data.SNT_uid;
-	uint8_t node_id = RuleRowptr->data.node_id;
-
-	//get SNT_uid from rule rows and find
-	ListNode<ScenarioRow_t> *rowptr = theSys.SearchScenario(SNT_uid);
-
-	if (rowptr)
-	{
-		MyMessage tmpMsg;
-		UC payl_buf[MAX_PAYLOAD];
-		UC payl_len;
-
-		for( UC idx = 0; idx < MAX_RING_NUM; idx++ ) {
-			payl_len = theSys.CreateColorPayload(payl_buf, idx + 1, rowptr->data.ring[idx].State,
-				          rowptr->data.ring[idx].BR, rowptr->data.ring[idx].CCT % 256, rowptr->data.ring[idx].R, rowptr->data.ring[idx].G, rowptr->data.ring[idx].B);
-			tmpMsg.build(theRadio.getAddress(), node_id, 1, C_SET, V_RGBW, true);
-			tmpMsg.set((void *)payl_buf, payl_len);
-			theRadio.ProcessSend(&tmpMsg);
-		}
-	}
-	else
-	{
-		LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenerio %d not found", node_id, SNT_uid);
-		return;
-	}
+	// Execute the rule with init-flag
+	theSys.Execute_Rule(RuleRowptr, true);
 }
 
 //------------------------------------------------------------------
@@ -111,8 +87,10 @@ void SmartControllerClass::Init()
 
 #ifdef SYS_SERIAL_DEBUG
 	// Wait Serial connection so that we can see the starting information
-	while(!TheSerial.available()) { Particle.process(); }
-	SERIAL_LN(F("SmartController is starting..."));
+	while(!TheSerial.available()) {
+		if( Particle.connected() == true ) { Particle.process(); }
+	}
+	SERIAL_LN("SmartController is starting...");
 #endif
 
 	// Get System ID
@@ -134,11 +112,14 @@ void SmartControllerClass::Init()
 /// check RF2.4 & BLE
 void SmartControllerClass::InitRadio()
 {
+	// Set NetworkID
+	while(theRadio.GetNetworkID() == 0) delay(50);
+
 	// Check RF2.4
 	if( CheckRF() ) {
   	if (IsRFGood())
   	{
-  		LOGN(LOGTAG_MSG, F("RF2.4 is working."));
+  		LOGN(LOGTAG_MSG, "RF2.4 is working.");
   		SetStatus(STATUS_BMW);
   	}
   }
@@ -147,7 +128,7 @@ void SmartControllerClass::InitRadio()
 	CheckBLE();
 	if (IsBLEGood())
 	{
-		LOGN(LOGTAG_MSG, F("BLE is working."));
+		LOGN(LOGTAG_MSG, "BLE is working.");
 	}
 }
 
@@ -164,7 +145,7 @@ void SmartControllerClass::InitNetwork()
 	if (IsWANGood())
 	{
 		if( !oldWAN ) {	// Only log when status changed
-			LOGN(LOGTAG_EVENT, F("WAN is working."));
+			LOGN(LOGTAG_EVENT, "WAN is working.");
 			SetStatus(STATUS_NWS);
 		}
 
@@ -176,7 +157,7 @@ void SmartControllerClass::InitNetwork()
 	else if (IsLANGood())
 	{
 		if( !oldLAN ) {	// Only log when status changed
-			LOGN(LOGTAG_EVENT, F("LAN is working."));
+			LOGN(LOGTAG_EVENT, "LAN is working.");
 			SetStatus(STATUS_DIS);
 		}
 	}
@@ -204,15 +185,13 @@ void SmartControllerClass::InitPins()
 #ifndef MCU_TYPE_Particle
 	pinMode(PIN_BTN_UP, INPUT);
 	pinMode(PIN_BTN_OK, INPUT);
-	pinMode(PIN_BTN_DOWN, INPUT);
-	pinMode(PIN_ANA_WKP, INPUT);
 
 	// Set Sensors pin Mode
 	//pinModes are already defined in the ::begin() method of each sensor library, may need to be ommitted from here
 	pinMode(PIN_SEN_DHT, INPUT);
-	pinMode(PIN_SEN_LIGHT, INPUT);
-	pinMode(PIN_SEN_MIC, INPUT);
-	pinMode(PIN_SEN_PIR, INPUT);
+//	pinMode(PIN_SEN_LIGHT, INPUT);
+//	pinMode(PIN_SEN_MIC, INPUT);
+//	pinMode(PIN_SEN_PIR, INPUT);
 #endif
 
 	// Brightness level indicator to LS138
@@ -237,22 +216,22 @@ void SmartControllerClass::InitSensors()
 	// DHT
 	if (theConfig.IsSensorEnabled(sensorDHT)) {
 		senDHT.begin();
-		LOGD(LOGTAG_MSG, F("DHT sensor works."));
+		LOGD(LOGTAG_MSG, "DHT sensor works.");
 	}
 
 	// Light
-	if (theConfig.IsSensorEnabled(sensorALS)) {
+	/*if (theConfig.IsSensorEnabled(sensorALS)) {
 		senLight.begin(SEN_LIGHT_MAX, SEN_LIGHT_MIN);	// Reversed threshold
-		LOGD(LOGTAG_MSG, F("Light sensor works."));
-	}
+		LOGD(LOGTAG_MSG, "Light sensor works.");
+	}*/
 
 	// Brightness indicator
 
 	// PIR
-	if (theConfig.IsSensorEnabled(sensorPIR)) {
+	/*if (theConfig.IsSensorEnabled(sensorPIR)) {
 		senMotion.begin();
-		LOGD(LOGTAG_MSG, F("Motion sensor works."));
-	}
+		LOGD(LOGTAG_MSG, "Motion sensor works.");
+	}*/
 
 
 	// ToDo:
@@ -264,17 +243,19 @@ void SmartControllerClass::InitCloudObj()
 	// Set cloud variable initial value
 	m_tzString = theConfig.GetTimeZoneJSON();
 
-	CloudObjClass::InitCloudObj();
-	LOGN(LOGTAG_MSG, F("Cloud Objects registered."));
+	if( theConfig.GetUseCloud() != CLOUD_DISABLE ) {
+		CloudObjClass::InitCloudObj();
+		LOGN(LOGTAG_MSG, "Cloud Objects registered.");
+	}
 }
 
 // Get the controller started
 BOOL SmartControllerClass::Start()
 {
 	// ToDo:bring controller up along with all modules (RF, wifi, BLE)
-	m_pMainDev = SearchDevStatus(NODEID_MAINDEVICE);
+	FindCurrentDevice();
 
-	LOGI(LOGTAG_MSG, F("SmartController started."));
+	LOGI(LOGTAG_MSG, "SmartController started.");
 	LOGI(LOGTAG_MSG, "Product Info: %s-%s-%d",
 			theConfig.GetOrganization().c_str(), theConfig.GetProductName().c_str(), theConfig.GetVersion());
 	LOGI(LOGTAG_MSG, "System Info: %s-%s",
@@ -291,12 +272,12 @@ BOOL SmartControllerClass::Start()
 	if( m_pMainDev ) {
 		// Set panel ring on or off
 		thePanel.SetRingOnOff(m_pMainDev->data.ring[0].State);
-		DevSoftSwitch(m_pMainDev->data.ring[0].State, NODEID_MAINDEVICE);
+		DevSoftSwitch(m_pMainDev->data.ring[0].State, CURRENT_DEVICE);
 		// Set CCT or RGBW
 		if( IS_SUNNY(m_pMainDev->data.type) ) {
 			// Set CCT
 			thePanel.UpdateCCTValue(m_pMainDev->data.ring[0].CCT);
-			ChangeLampCCT(NODEID_MAINDEVICE, m_pMainDev->data.ring[0].CCT);
+			ChangeLampCCT(CURRENT_DEVICE, m_pMainDev->data.ring[0].CCT);
 		} else if( IS_RAINBOW(m_pMainDev->data.type) || IS_MIRAGE(m_pMainDev->data.type) ) {
 			// Rainbow or Mirage
 			// ToDo: set RGBW
@@ -304,18 +285,24 @@ BOOL SmartControllerClass::Start()
 	}
 
 	// Publish local the main device status
-	UL tm = 0x4ff;	// Delay 1.5s in order to publish
-	while(tm-- > 0){ Particle.process(); }
-	QueryDeviceStatus(NODEID_MAINDEVICE);
+	if( Particle.connected() == true ) {
+		UL tm = 0x4ff;	// Delay 1.5s in order to publish
+		while(tm-- > 0){ Particle.process(); }
+	}
+	QueryDeviceStatus(CURRENT_DEVICE);
 
 	// Request the main device to report status
-	RequestDeviceStatus(NODEID_MAINDEVICE);
+	RequestDeviceStatus(CURRENT_DEVICE);
+
+	// Acts on the Rules rules newly loaded from flash
+	ReadNewRules(true);
 
 	return true;
 }
 
 void SmartControllerClass::Restart()
 {
+	theConfig.SaveConfig();
 	SetStatus(STATUS_RST);
 	delay(1000);
 	System.reset();
@@ -329,11 +316,40 @@ UC SmartControllerClass::GetStatus()
 BOOL SmartControllerClass::SetStatus(UC st)
 {
 	if( st > STATUS_ERR ) return false;
-	LOGN(LOGTAG_STATUS, F("System status changed from %d to %d"), m_SysStatus, st);
+	LOGN(LOGTAG_STATUS, "System status changed from %d to %d", m_SysStatus, st);
 	if ((UC)m_SysStatus != st) {
 		m_SysStatus = st;
 	}
 	return true;
+}
+
+// Connect to the Cloud
+BOOL SmartControllerClass::connectCloud()
+{
+	BOOL retVal = Particle.connected();
+	if( !retVal ) {
+		SERIAL("Cloud connecting...");
+	  Particle.connect();
+	  waitFor(Particle.connected, RTE_CLOUD_CONN_TIMEOUT);
+	  retVal = Particle.connected();
+		SERIAL_LN("%s", retVal ? "OK" : "Failed");
+	}
+  return retVal;
+}
+
+// Connect Wi-Fi
+BOOL SmartControllerClass::connectWiFi()
+{
+	BOOL retVal = WiFi.ready();
+	if( !retVal ) {
+		SERIAL("Wi-Fi connecting...");
+	  WiFi.connect();
+	  waitFor(WiFi.ready, RTE_WIFI_CONN_TIMEOUT);
+	  retVal = WiFi.ready();
+		SERIAL_LN("%s", retVal ? "OK" : "Failed");
+	}
+  theConfig.SetWiFiStatus(retVal);
+  return retVal;
 }
 
 // Close and reopen serial port to avoid buffer overrun
@@ -361,14 +377,14 @@ BOOL SmartControllerClass::CheckWiFi()
 	if( WiFi.RSSI() > 0 ) {
 		m_isWAN = false;
 		m_isLAN = false;
-		LOGE(LOGTAG_MSG, F("Wi-Fi chip error!"));
+		LOGE(LOGTAG_MSG, "Wi-Fi chip error!");
 		return false;
 	}
 
 	if( !WiFi.ready() ) {
 		m_isWAN = false;
 		m_isLAN = false;
-		LOGE(LOGTAG_EVENT, F("Wi-Fi module error!"));
+		LOGE(LOGTAG_EVENT, "Wi-Fi module error!");
 		return false;
 	}
 	return true;
@@ -388,10 +404,10 @@ BOOL SmartControllerClass::CheckNetwork()
 	if( !m_isWAN ) {
 		m_isLAN = (WiFi.ping(WiFi.gatewayIP(), 3) < 3);
 		if( !m_isLAN ) {
-			LOGW(LOGTAG_MSG, F("Cannot reach local gateway!"));
+			LOGW(LOGTAG_MSG, "Cannot reach local gateway!");
 			m_isLAN = (WiFi.ping(WiFi.localIP(), 3) < 3);
 			if( !m_isLAN ) {
-				LOGE(LOGTAG_MSG, F("Cannot reach itself!"));
+				LOGE(LOGTAG_MSG, "Cannot reach itself!");
 			}
 		}
 	} else {
@@ -413,6 +429,7 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 	static US tickSaveConfig = 0;				// must be static
 	static US tickCheckRadio = 0;				// must be static
 	static UC tickAcitveCheck = 0;
+	static UC tickWiFiOff = 0;
 
 	// Check all alarms. This triggers them.
 	Alarm.delay(ms);
@@ -433,13 +450,44 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 				theRadio.switch2BaseNetwork();
 				delay(10);
 				theRadio.switch2MyNetwork();
-        LOGN(LOGTAG_MSG, F("RF24 moudle recovered."));
+        LOGN(LOGTAG_MSG, "RF24 moudle recovered.");
       }
     }
 
 		// Check Network
-		if( !IsWANGood() || tickAcitveCheck % 5 == 0 || GetStatus() == STATUS_DIS ) {
-			InitNetwork();
+		if( theConfig.GetWiFiStatus() ) {
+			if( !IsWANGood() || tickAcitveCheck % 5 == 0 || GetStatus() == STATUS_DIS ) {
+				InitNetwork();
+			}
+
+			if( IsWANGood() ) { // WLAN is good
+				tickWiFiOff = 0;
+				if( !Particle.connected() ) {
+					// Cloud disconnected, try to recover
+					if( theConfig.GetUseCloud() != CLOUD_DISABLE ) {
+						connectCloud();
+					}
+				} else {
+					if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
+						Particle.disconnect();
+					}
+				}
+			} else { // WLAN is wrong
+				if( ++tickWiFiOff > 5 ) {
+					theConfig.SetWiFiStatus(false);
+					if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
+						SERIAL_LN("System is about to reset due to lost of network...");
+						Restart();
+					} else {
+						// Avoid keeping trying
+						LOGE(LOGTAG_MSG, "Turn off WiFi!");
+						WiFi.disconnect();
+						WiFi.off();	// In order to resume Wi-Fi, restart the application
+					}
+				}
+			}
+		} else if( WiFi.ready() ) {
+			theConfig.SetWiFiStatus(true);
 		}
 
 		// Daily Cloud Synchronization
@@ -464,7 +512,7 @@ BOOL SmartControllerClass::CheckRFBaseNetEnableDur()
 	if( theConfig.GetMaxBaseNetworkDur() > 0 ) {
 		if( theRadio.getBaseNetworkDuration() > theConfig.GetMaxBaseNetworkDur() ) {
 			theRadio.enableBaseNetwork(false);
-			LOGI(LOGTAG_MSG, F("RF base network enable timeout, disable it automatically"));
+			LOGI(LOGTAG_MSG, "RF base network enable timeout, disable it automatically");
 			return true;
 		}
 	}
@@ -495,7 +543,10 @@ BOOL SmartControllerClass::IsWANGood()
 // Process all kinds of commands
 void SmartControllerClass::ProcessCommands()
 {
-	// Check and process RF2.4 messages
+	// Check RF Message
+	theRadio.PeekMessage();
+
+	// Process RF2.4 messages
 	theRadio.ProcessReceive();
 
 	// Process Console Command
@@ -525,11 +576,11 @@ void SmartControllerClass::CollectData(UC tick)
 				blnReadDHT = true;
 		}
 		if (theConfig.IsSensorEnabled(sensorALS)) {
-			if (tick % SEN_ALS_SPEED_NORMAL == 0)
+			if (tick % SEN_DHT_SPEED_NORMAL == 0)
 				blnReadALS = true;
 		}
 		if (theConfig.IsSensorEnabled(sensorPIR)) {
-			if (tick % SEN_PIR_SPEED_NORMAL == 0)
+			if (tick % SEN_DHT_SPEED_NORMAL == 0)
 				blnReadPIR = true;
 		}
 		break;
@@ -567,14 +618,14 @@ void SmartControllerClass::CollectData(UC tick)
 	}
 
 	// Read from ALS
-	if (blnReadALS) {
-		UpdateBrightness(senLight.getLevel());
-	}
+	/*if (blnReadALS) {
+		UpdateBrightness(NODEID_GATEWAY, senLight.getLevel());
+	}*/
 
 	// Motion detection
-	if (blnReadPIR) {
-		UpdateMotion(senMotion.getMotion());
-	}
+	/*if (blnReadPIR) {
+		UpdateMotion(NODEID_GATEWAY, senMotion.getMotion());
+	}*/
 
 	// Update json data and publish on to the cloud
 	if (blnReadDHT || blnReadALS || blnReadPIR) {
@@ -818,8 +869,8 @@ int SmartControllerClass::CldJSONCommand(String jsonCmd)
 		UC payl_buf[MAX_PAYLOAD];
 		UC payl_len;
 
-		payl_len = theSys.CreateColorPayload(payl_buf, ring, State, BR, W, R, G, B);
-		tmpMsg.build(theRadio.getAddress(), node_id, 1, C_SET, V_RGBW, true);
+		payl_len = CreateColorPayload(payl_buf, ring, State, BR, W, R, G, B);
+		tmpMsg.build(theRadio.getAddress(), node_id, NODEID_DUMMY, C_SET, V_RGBW, true);
 		tmpMsg.set((void *)payl_buf, payl_len);
 		theRadio.ProcessSend(&tmpMsg);
 	}
@@ -852,27 +903,7 @@ int SmartControllerClass::CldJSONCommand(String jsonCmd)
 		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
 		const int SNT_uid = (*m_jpCldCmd)["SNT_id"].as<int>();
 
-		//find hue data of the 3 rings
-		ListNode<ScenarioRow_t> *rowptr = SearchScenario(SNT_uid);
-		if (rowptr)
-		{
-			MyMessage tmpMsg;
-			UC payl_buf[MAX_PAYLOAD];
-			UC payl_len;
-
-			for( UC idx = 0; idx < MAX_RING_NUM; idx++ ) {
-				payl_len = theSys.CreateColorPayload(payl_buf, idx + 1, rowptr->data.ring[idx].State,
-					          rowptr->data.ring[idx].BR, rowptr->data.ring[idx].CCT % 256, rowptr->data.ring[idx].R, rowptr->data.ring[idx].G, rowptr->data.ring[idx].B);
-				tmpMsg.build(theRadio.getAddress(), node_id, 1, C_SET, V_RGBW, true);
-				tmpMsg.set((void *)payl_buf, payl_len);
-				theRadio.ProcessSend(&tmpMsg);
-			}
-		}
-		else
-		{
-			LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenerio %d not found", node_id, SNT_uid);
-			return 0;
-		}
+		ChangeLampScenario((UC)node_id, (UC)SNT_uid);
 	}
 
 	//COMMAND 6: Query Device Status
@@ -979,6 +1010,8 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 	const char* uidWhole = data["uid"];
 	char uidKey = tolower(uidWhole[0]);
 	uint8_t uidNum = atoi(&uidWhole[1]);
+	UC _cond;
+	String sTemp;
 
 	switch(uidKey)
 	{
@@ -990,9 +1023,38 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 			row.run_flag = run_flag;
 			row.uid = uidNum;
 			row.node_id = data["node_uid"];
-			row.SCT_uid = data["SCT_uid"];
-			row.SNT_uid = data["SNT_uid"];
-			row.notif_uid = data["notif_uid"];
+			if( data.containsKey("SCT_uid") )
+				row.SCT_uid = data["SCT_uid"];
+			else row.SCT_uid = 255;
+			if( data.containsKey("SNT_uid") )
+				row.SNT_uid = data["SNT_uid"];
+			else row.SNT_uid = 255;
+			if( data.containsKey("notif_uid") )
+				row.notif_uid = data["notif_uid"];
+			else row.notif_uid = 255;
+			if( data.containsKey("tmr_int") )
+				row.tmr_int = data["tmr_int"];
+			else row.tmr_int = 0;
+			if( data.containsKey("tmr_span") )
+				row.tmr_span = data["tmr_span"];
+			else row.tmr_span = 0;
+			row.tmr_started = 0;
+
+			// Get conditions
+			for( _cond = 0; _cond < MAX_CONDITION_PER_RULE; _cond++ ) {
+				sTemp = String::format("cond%d", _cond);
+				if( data.containsKey(sTemp) ) {
+					row.actCond[_cond].enabled = data[sTemp][0];
+					row.actCond[_cond].sr_scope = data[sTemp][1];
+					row.actCond[_cond].symbol = data[sTemp][2];
+					row.actCond[_cond].connector = data[sTemp][3];
+					row.actCond[_cond].sr_id = data[sTemp][4];
+					row.actCond[_cond].sr_value1 = data[sTemp][5];
+					row.actCond[_cond].sr_value2 = data[sTemp][6];
+				} else {
+					row.actCond[_cond].enabled = false;
+				}
+			}
 
 			isSuccess = Change_Rule(row);
 			if (!isSuccess)
@@ -1017,7 +1079,7 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 
 			if (data["isRepeat"] == 1)
 			{
-				if (data["weekdays"] < 0 || data["weekdays"] > 7)		// [0..7]
+				if (data["weekdays"] > 7)		// [0..7]
 				{
 					LOGE(LOGTAG_MSG, "UID:%s Invalid 'weekdays' must between 0 and 7", uidWhole);
 					return 0;
@@ -1076,12 +1138,28 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 			row.run_flag = run_flag;
 			row.uid = uidNum;
 
-			// Copy JSON array to Hue
-			Array2Hue(data["ring1"], row.ring[0]);
-			Array2Hue(data["ring2"], row.ring[1]);
-			Array2Hue(data["ring3"], row.ring[2]);
+			// Power Switch
+			if( data.containsKey("sw") ) {
+				row.sw = data["sw"];
+			} else {
+				row.sw = DEVICE_SW_DUMMY;
+				// Copy JSON array to Hue
+				if( data.containsKey("ring0") ) {
+					Array2Hue(data["ring0"], row.ring[0]);
+					Array2Hue(data["ring0"], row.ring[1]);
+					Array2Hue(data["ring0"], row.ring[2]);
+				} else {
+					if( data.containsKey("ring1") )
+						Array2Hue(data["ring0"], row.ring[0]);
+					if( data.containsKey("ring2") )
+						Array2Hue(data["ring2"], row.ring[1]);
+					if( data.containsKey("ring3") )
+						Array2Hue(data["ring3"], row.ring[2]);
+				}
+			}
 
-			row.filter = data["filter"];
+			if( data.containsKey("filter") )
+				row.filter = data["filter"];
 
 			isSuccess = Change_Scenario(row);
 			if (!isSuccess)
@@ -1486,7 +1564,7 @@ bool SmartControllerClass::updateDevStatusRow(MyMessage msg)
 	// This is very bad for the flash memory in the long run, as the memory will wear down each time the
 	// user turns on or off the light
 	DevStatusRowPtr->data.flash_flag = UNSAVED; //required
-	DevStatusRowPtr->data.run_flag == EXECUTED; //redundant, already should be EXECUTED
+	DevStatusRowPtr->data.run_flag = EXECUTED; //redundant, already should be EXECUTED
 	theConfig.SetDSTChanged(true);
 
 	return true;
@@ -1526,21 +1604,182 @@ bool SmartControllerClass::ExecuteLightCommand(String mySerialStr)
 	return false;
 }
 
-bool SmartControllerClass::Change_Sensor()
+// Match sensor data to condition
+bool SmartControllerClass::Check_SensorData(UC _scope, UC _sr, UC _symbol, US _val1, US _val2)
 {
-  	//Possible subactions: GET
-    //ToDo: define later
+	// Retrieve sensor data
+	US senData = 0;
+	switch( _scope ) {
+		case SR_SCOPE_CONTROLLER:
+		case SR_SCOPE_NODE:
+		// ToDo: should distinguish node and more sensors
+		if( _sr == sensorDHT ) {
+			senData = (US)(m_temperature + 0.5);
+		} else if( _sr == sensorDHT_h ) {
+			senData = (US)(m_humidity + 0.5);
+		} else if( _sr == sensorALS ) {
+			senData = m_brightness;
+		} else if( _sr == sensorPIR ) {
+			senData = m_motion;
+		} else if( _sr == sensorSMOKE ) {
+			senData = m_smoke;
+		} else if( _sr == sensorGAS ) {
+			senData = m_gas;
+		} else if( _sr == sensorDUST ) {
+			senData = m_dust;
+		}
+		break;
 
-	return 1;
+		case SR_SCOPE_ANY:
+		// ToDo:
+		break;
+
+		case SR_SCOPE_GROUP:
+		// ToDo:
+		break;
+
+		default:
+		return false;
+	}
+
+	// Assert value
+	bool rc = false;
+	switch( _symbol ) {
+		case SR_SYM_EQ:
+		rc = (senData == _val1);
+		break;
+
+		case SR_SYM_NE:
+		rc = (senData != _val1);
+		break;
+
+		case SR_SYM_GT:
+		rc = (senData > _val1);
+		break;
+
+		case SR_SYM_GE:
+		rc = (senData >= _val1);
+		break;
+
+		case SR_SYM_LT:
+		rc = (senData < _val1);
+		break;
+
+		case SR_SYM_LE:
+		rc = (senData <= _val1);
+		break;
+
+		case SR_SYM_BW:
+		rc = (senData >= _val1 && senData <= _val2);
+		break;
+
+		case SR_SYM_NB:
+		rc = (senData < _val1 || senData > _val2);
+		break;
+
+		default:
+		return false;
+	}
+	return rc;
+}
+
+// Execute Rule, called by Action_Rule(), AlarmTimerTriggered() and OnSensorDataChanged()
+bool SmartControllerClass::Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init, UC _sr)
+{
+	// Whether execute
+	if( _init ) {
+		// Start timer
+		if( rulePtr->data.tmr_int ) {
+			rulePtr->data.tmr_tic_start = millis();
+			rulePtr->data.tmr_started = 1;
+		}
+	} else {
+		// Check timer
+		if( !rulePtr->data.tmr_started ) return false;
+		if( rulePtr->data.tmr_span > 0 ) {
+			// contintue or stop
+			if( (millis() - rulePtr->data.tmr_tic_start) / 60000 > rulePtr->data.tmr_span ) {
+				// Time out and stop
+				rulePtr->data.tmr_started = 0;
+				return false;
+			}
+		}
+	}
+
+	UC _cond;
+	bool bTrigger = false;
+	// Whether conditions contain this sensor
+	if( _sr < 255 ) {
+		for(_cond = 0; _cond < MAX_CONDITION_PER_RULE; _cond++ ) {
+			if( !rulePtr->data.actCond[_cond].enabled ) return false;
+			if( rulePtr->data.actCond[_cond].sr_id == _sr ) {
+				// Go on check conditions
+				bTrigger = true;
+				break;
+			}
+		}
+		// no this sensor
+		if( !bTrigger ) return false;
+	} else {
+		bTrigger = true;
+	}
+
+	// Check conditions
+	bool bTest;
+	UC _connector = COND_SYM_NOT;
+	for(_cond = 0; _cond < MAX_CONDITION_PER_RULE; _cond++ ) {
+		if( !rulePtr->data.actCond[_cond].enabled ) break;
+
+		bTest = Check_SensorData(rulePtr->data.actCond[_cond].sr_scope, rulePtr->data.actCond[_cond].sr_id,
+				rulePtr->data.actCond[_cond].symbol, rulePtr->data.actCond[_cond].sr_value1, rulePtr->data.actCond[_cond].sr_value2);
+
+		if( _connector != COND_SYM_NOT ) {
+			if( _connector == COND_SYM_OR ) {
+				bTrigger |= bTest;
+			} else if( _connector == COND_SYM_AND ) {
+				bTrigger &= bTest;
+			}
+		} else {
+			bTrigger = bTest;
+		}
+		_connector = rulePtr->data.actCond[_cond].connector;
+		// Exit earlier
+		if( bTrigger && _connector == COND_SYM_OR ) break;
+		if( !bTrigger && _connector == COND_SYM_AND ) break;
+	}
+
+	// Switch to desired scenario
+	if( bTrigger ) {
+		LOGI(LOGTAG_EVENT, "Rule %d triggered by sensor %d", rulePtr->data.uid, _sr);
+		ChangeLampScenario(rulePtr->data.node_id, rulePtr->data.SNT_uid);
+
+		// Send Notification
+		if( rulePtr->data.notif_uid < 255 && Particle.connected() ) {
+			StaticJsonBuffer<256> jBuf;
+			JsonObject *jroot;
+			jroot = &(jBuf.createObject());
+			if( jroot->success() ) {
+				(*jroot)["notif"] = rulePtr->data.notif_uid;
+				(*jroot)["rule"] = rulePtr->data.uid;
+				(*jroot)["nd"] = rulePtr->data.node_id;
+				(*jroot)["snt"] = rulePtr->data.SNT_uid;
+				char buffer[256];
+				jroot->printTo(buffer, 256);
+				PublishAlarm(buffer);
+			}
+		}
+	}
+
+	return bTrigger;
 }
 
 //------------------------------------------------------------------
 // Acting on new rows in working memory Chains
 //------------------------------------------------------------------
-
-void SmartControllerClass::ReadNewRules()
+// Scan Rule list and create associated objectss, such as Schedule (Alarm), Scenario, etc.
+void SmartControllerClass::ReadNewRules(bool force)
 {
-	if (theConfig.IsRTChanged())
+	if (theConfig.IsRTChanged() || force)
 	{
 		ListNode<RuleRow_t> *ruleRowPtr = Rule_table.getRoot();
 		while (ruleRowPtr != NULL)
@@ -1549,6 +1788,18 @@ void SmartControllerClass::ReadNewRules()
 			ruleRowPtr = ruleRowPtr->next;
 		} //end of loop
 	}
+}
+
+// Scan rule list and check conditions in accordance with changed sensor
+void SmartControllerClass::OnSensorDataChanged(UC _sr)
+{
+	ListNode<RuleRow_t> *ruleRowPtr = Rule_table.getRoot();
+	while (ruleRowPtr != NULL)
+	{
+		// Execute the rule with changed sensor
+		Execute_Rule(ruleRowPtr, false, _sr);
+		ruleRowPtr = ruleRowPtr->next;
+	} //end of loop
 }
 
 bool SmartControllerClass::CreateAlarm(ListNode<ScheduleRow_t>* scheduleRow, uint32_t tag)
@@ -1622,17 +1873,21 @@ bool SmartControllerClass::Action_Rule(ListNode<RuleRow_t> *rulePtr)
 
 	if (rulePtr->data.run_flag == UNEXECUTED)
 	{
-		// Process Schedule
-		Action_Schedule(rulePtr->data.op_flag, rulePtr->data.SCT_uid, rulePtr->data.uid);
+		// Process Schedule: install alarm trigger
+		if( rulePtr->data.SCT_uid < 255 ) {
+			// Schedule will take over the rule, and exectue the rule later
+			Action_Schedule(rulePtr->data.op_flag, rulePtr->data.SCT_uid, rulePtr->data.uid);
+		} else {
+			// Execute the rule with init-flag
+			Execute_Rule(rulePtr, true);
+		}
 
-		//Search for SNT data
-		ListNode<ScenarioRow_t> *scenarioPtr = SearchScenario(rulePtr->data.SNT_uid);
-
-		// ToDo: search and set other trigger conditions
-		//...
+		// Process Conditions: install sensor triggers
+		// ToDo: currently we scan all rules on sensor data changed by calling OnSensorDataChanged(),
+		/// but in the future, we may need to install handlers to skim down processing
 
 		rulePtr->data.run_flag = EXECUTED;
-		scenarioPtr->data.run_flag = EXECUTED;
+		theConfig.SetRTChanged(true);
 	}
 
 	return true;
@@ -1693,6 +1948,7 @@ bool SmartControllerClass::Action_Schedule(OP_FLAG parentFlag, UC uid, UC rule_u
 
 		// Set flag anyway
 		scheduleRow->data.run_flag = EXECUTED;
+		theConfig.SetSCTChanged(true);
 	}
 	else //schedule row not found in chain or Flash
 	{
@@ -1802,6 +2058,16 @@ ListNode<DevStatusRow_t>* SmartControllerClass::SearchDevStatus(UC dest_id)
 //------------------------------------------------------------------
 // Device Operations
 //------------------------------------------------------------------
+BOOL SmartControllerClass::FindCurrentDevice()
+{
+	if( CURRENT_DEVICE == NODEID_DUMMY ) {
+		m_pMainDev = SearchDevStatus(NODEID_MAINDEVICE);
+	} else {
+		m_pMainDev = SearchDevStatus(CURRENT_DEVICE);
+	}
+	return(m_pMainDev != NULL);
+}
+
 US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t _identity)
 {
 	NodeIdRow_t lv_Node;
@@ -1809,7 +2075,7 @@ US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t 
 	lv_Node.nid = _nodeID;
 	if( theConfig.lstNodes.get(&lv_Node) < 0 ) return 0;
 	if( isIdentityEmpty(lv_Node.identity) || !isIdentityEqual(lv_Node.identity, &_identity) ) {
-		LOGN(LOGTAG_MSG, F("Failed to verify identity for device:%d"), _nodeID);
+		LOGN(LOGTAG_MSG, "Failed to verify identity for device:%d", _nodeID);
 		return 0;
 	}
 	// Update timestamp
@@ -1832,7 +2098,7 @@ US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t 
 			}
 		}
 		if(!DevStatusRowPtr) {
-			LOGW(LOGTAG_MSG, F("Failed to get item form DST for device:%d"), _nodeID);
+			LOGW(LOGTAG_MSG, "Failed to get item form DST for device:%d", _nodeID);
 			return 0;
 		}
 
@@ -1841,7 +2107,7 @@ US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t 
 		DevStatusRowPtr->data.type = _devType;
 		DevStatusRowPtr->data.token = token;
 		DevStatusRowPtr->data.flash_flag = UNSAVED; //required
-		DevStatusRowPtr->data.run_flag == EXECUTED; //redundant, already should be EXECUTED
+		DevStatusRowPtr->data.run_flag = EXECUTED; //redundant, already should be EXECUTED
 		theConfig.SetDSTChanged(true);
 	} else {
 		// Remote
@@ -1856,10 +2122,15 @@ US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t 
 
 BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID)
 {
-	BOOL rc = false;
-	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
+	BOOL rc = false, _st;
+	ListNode<DevStatusRow_t> *DevStatusRowPtr;
+	if( IS_CURRENT_DEVICE(_nodeID) ) {
+		DevStatusRowPtr = m_pMainDev;
+	} else {
+		DevStatusRowPtr = SearchDevStatus(_nodeID);
+	}
 	if (DevStatusRowPtr) {
-		BOOL _st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? true : !DevStatusRowPtr->data.ring[0].State);
+		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? true : !DevStatusRowPtr->data.ring[0].State);
 		rc = DevSoftSwitch(_st, _nodeID);
 		// Wait for confirmation or not
 		if( !rc ) {
@@ -1895,6 +2166,68 @@ BOOL SmartControllerClass::ChangeBR_CCT(UC _nodeID, UC _br, US _cct)
 	return theRadio.ProcessSend(strCmd);
 }
 
+BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
+{
+	// Find node object
+	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
+	if (DevStatusRowPtr == NULL)
+	{
+		LOGW(LOGTAG_MSG, "Failed to execte CMD_SCENARIO, wrong node_id %d", _nodeID);
+		return false;
+	}
+
+	// Find hue data of the 3 rings
+	ListNode<ScenarioRow_t> *rowptr = SearchScenario(_scenarioID);
+	if (rowptr)
+	{
+		String strCmd;
+		if( rowptr->data.sw != DEVICE_SW_DUMMY ) {
+			strCmd = String::format("%d:7:%d", _nodeID, rowptr->data.sw);
+			theRadio.ProcessSend(strCmd);
+		} else {
+			if( IS_SUNNY(DevStatusRowPtr->data.type) ) {
+				if( rowptr->data.ring[0].State == DEVICE_SW_OFF ) {
+					strCmd = String::format("%d:7:0", _nodeID);
+				} else {
+					strCmd = String::format("%d:13:%d:%d", _nodeID, rowptr->data.ring[0].BR, rowptr->data.ring[0].CCT);
+				}
+				theRadio.ProcessSend(strCmd);
+			} else { // Rainbow and Migrage
+				MyMessage tmpMsg;
+				UC payl_buf[MAX_PAYLOAD];
+				UC payl_len;
+
+				// All rings same settings
+				bool bAllRings = (rowptr->data.ring[1].CCT == 256);
+
+				for( UC idx = 0; idx < MAX_RING_NUM; idx++ ) {
+					if( !bAllRings || idx == 0 ) {
+						payl_len = CreateColorPayload(payl_buf, bAllRings ? RING_ID_ALL : idx + 1, rowptr->data.ring[idx].State,
+												rowptr->data.ring[idx].BR, rowptr->data.ring[idx].CCT % 256, rowptr->data.ring[idx].R, rowptr->data.ring[idx].G, rowptr->data.ring[idx].B);
+						tmpMsg.build(theRadio.getAddress(), _nodeID, 0, C_SET, V_RGBW, true);
+						tmpMsg.set((void *)payl_buf, payl_len);
+						theRadio.ProcessSend(&tmpMsg);
+					}
+					if( IS_MIRAGE(DevStatusRowPtr->data.type) ) {
+						// ToDo: construct mirage message
+						//tmpMsg.build(theRadio.getAddress(), _nodeID, NODEID_DUMMY, C_SET, V_DISTANCE, true);
+						//tmpMsg.set((void *)payl_buf, payl_len);
+						//theRadio.ProcessSend(&tmpMsg);
+					}
+				}
+			}
+		}
+		rowptr->data.run_flag = EXECUTED;
+		theConfig.SetSNTChanged(true);
+	}
+	else
+	{
+		LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenerio %d not found", _nodeID, _scenarioID);
+		return false;
+	}
+	return true;
+}
+
 BOOL SmartControllerClass::RequestDeviceStatus(UC _nodeID)
 {
 	BOOL rc = false;
@@ -1918,7 +2251,9 @@ BOOL SmartControllerClass::ConfirmLampOnOff(UC _nodeID, UC _st)
 		theConfig.SetDSTChanged(true);
 
 		// Set panel ring on or off
-		thePanel.SetRingOnOff(_st);
+		if( IS_CURRENT_DEVICE(_nodeID) ) {
+			thePanel.SetRingOnOff(_st);
+		}
 
 		// Publish device status event
 		StaticJsonBuffer<256> jBuf;
@@ -1958,11 +2293,13 @@ BOOL SmartControllerClass::ConfirmLampBrightness(UC _nodeID, UC _st, UC _percent
 			DevStatusRowPtr->data.op_flag = POST;
 			theConfig.SetDSTChanged(true);
 
-			if( r_index == 0 ) {
-				// Set panel ring to new position
-				thePanel.UpdateDimmerValue(_percentage);
-				// Set panel ring off
-				thePanel.SetRingOnOff(_st);
+			if( IS_CURRENT_DEVICE(_nodeID) ) {
+				if( r_index == 0 ) {
+					// Set panel ring to new position
+					thePanel.UpdateDimmerValue(_percentage);
+					// Set panel ring off
+					thePanel.SetRingOnOff(_st);
+				}
 			}
 
 			// Publish device status event
@@ -2005,10 +2342,12 @@ BOOL SmartControllerClass::ConfirmLampCCT(UC _nodeID, US _cct, UC _ringID)
 			DevStatusRowPtr->data.op_flag = POST;
 			theConfig.SetDSTChanged(true);
 
-			if( r_index == 0 ) {
-				// Update cooresponding panel CCT value
-				thePanel.UpdateCCTValue(_cct);
-				thePanel.SetRingOnOff(DevStatusRowPtr->data.ring[0].State);
+			if( IS_CURRENT_DEVICE(_nodeID) ) {
+				if( r_index == 0 ) {
+					// Update cooresponding panel CCT value
+					thePanel.UpdateCCTValue(_cct);
+					thePanel.SetRingOnOff(DevStatusRowPtr->data.ring[0].State);
+				}
 			}
 
 			// Publish device status event
@@ -2238,14 +2577,28 @@ String SmartControllerClass::print_devStatus_table(int row)
 	String strShortDesc;
 
 	SERIAL_LN("==== DevStatus Row %d ====", row);
-	SERIAL_LN("uid = %d, type = %d", DevStatus_table.get(row).uid, DevStatus_table.get(row).type);
+	SERIAL_LN("%cuid = %d, type = %d", DevStatus_table.get(row).node_id == CURRENT_DEVICE ? '*' : ' ', DevStatus_table.get(row).uid, DevStatus_table.get(row).type);
 	SERIAL_LN("node_id = %d, present = %s", DevStatus_table.get(row).node_id, (DevStatus_table.get(row).present ? "true" : "false"));
-  SERIAL_LN("Status: %s, BR: %d, CCT: %d\n\r", DevStatus_table.get(row).ring[0].State ? "On" : "Off",
-				DevStatus_table.get(row).ring[0].BR, DevStatus_table.get(row).ring[0].CCT);
 
-	strShortDesc = String::format("nid:%d St:%d BR:%d, CCT:%d",
+	if( IS_SUNNY(DevStatus_table.get(row).type) ) {
+		SERIAL_LN("Status: %s, BR: %d, CCT: %d\n\r", DevStatus_table.get(row).ring[0].State ? "On" : "Off",
+					DevStatus_table.get(row).ring[0].BR, DevStatus_table.get(row).ring[0].CCT);
+		strShortDesc = String::format("%cnid:%d St:%d BR:%d, CCT:%d",
+				DevStatus_table.get(row).node_id == CURRENT_DEVICE ? '*' : ' ',
 				DevStatus_table.get(row).node_id, DevStatus_table.get(row).ring[0].State,
 				DevStatus_table.get(row).ring[0].BR, DevStatus_table.get(row).ring[0].CCT);
+	} else {
+		SERIAL_LN("Status: %s, BR: %d, WRGB: %d,%d,%d,%d\n\r", DevStatus_table.get(row).ring[0].State ? "On" : "Off",
+					DevStatus_table.get(row).ring[0].BR, DevStatus_table.get(row).ring[0].CCT,
+				  DevStatus_table.get(row).ring[0].R, DevStatus_table.get(row).ring[0].G,
+					DevStatus_table.get(row).ring[0].B);
+		strShortDesc = String::format("%cnid:%d St:%d BR:%d, WRGB:%d,%d,%d,%d",
+				DevStatus_table.get(row).node_id == CURRENT_DEVICE ? '*' : ' ',
+				DevStatus_table.get(row).node_id, DevStatus_table.get(row).ring[0].State,
+				DevStatus_table.get(row).ring[0].BR, DevStatus_table.get(row).ring[0].CCT,
+			  DevStatus_table.get(row).ring[0].R, DevStatus_table.get(row).ring[0].G,
+			  DevStatus_table.get(row).ring[0].B);
+	}
 	return(strShortDesc);
 
 /*
@@ -2280,7 +2633,7 @@ String SmartControllerClass::print_devStatus_table(int row)
 void SmartControllerClass::print_schedule_table(int row)
 {
 	SERIAL_LN("====================");
-	SERIAL_LN("==== SCT Row %d ====", row);
+	SERIAL_LN("==== SCT-Row %d ====", row);
 
 	switch (Schedule_table.get(row).op_flag)
 	{
@@ -2309,37 +2662,42 @@ void SmartControllerClass::print_schedule_table(int row)
 
 void SmartControllerClass::print_scenario_table(int row)
 {
+	ScenarioRow_t rowData = Scenario_table.get(row);
 	SERIAL_LN("====================");
-	SERIAL_LN("==== SNT	Row %d ====", row);
+	SERIAL_LN("==== SNT-Row %d ====", row);
 
-	switch (Scenario_table.get(row).op_flag)
+	switch (rowData.op_flag)
 	{
 	case 0: SERIAL_LN("op_flag = GET"); break;
 	case 1: SERIAL_LN("op_flag = POST"); break;
 	case 2: SERIAL_LN("op_flag = PUT"); break;
 	case 3: SERIAL_LN("op_flag = DELETE"); break;
 	}
-	switch (Scenario_table.get(row).flash_flag)
+	switch (rowData.flash_flag)
 	{
 	case 0: SERIAL_LN("flash_flag = UNSAVED"); break;
 	case 1: SERIAL_LN("flash_flag = SAVED"); break;
 	}
-	switch (Scenario_table.get(row).run_flag)
+	switch (rowData.run_flag)
 	{
 	case 0: SERIAL_LN("run_flag = UNEXECUTED"); break;
 	case 1: SERIAL_LN("run_flag = EXECUTED"); break;
 	}
-	SERIAL_LN("uid = %d", Scenario_table.get(row).uid);
-	SERIAL_LN("ring1 = %s", hue_to_string(Scenario_table.get(row).ring[0]).c_str());
-	SERIAL_LN("ring2 = %s", hue_to_string(Scenario_table.get(row).ring[1]).c_str());
-	SERIAL_LN("ring3 = %s", hue_to_string(Scenario_table.get(row).ring[2]).c_str());
-	SERIAL_LN("filter = %d", Scenario_table.get(row).filter);
+	SERIAL_LN("uid = %d", rowData.uid);
+	if( rowData.sw != DEVICE_SW_DUMMY ) {
+		SERIAL_LN("switch = %d", rowData.sw);
+	} else {
+		SERIAL_LN("ring1 = %s", hue_to_string(rowData.ring[0]).c_str());
+		SERIAL_LN("ring2 = %s", hue_to_string(rowData.ring[1]).c_str());
+		SERIAL_LN("ring3 = %s", hue_to_string(rowData.ring[2]).c_str());
+	}
+	SERIAL_LN("filter = %d", rowData.filter);
 }
 
 void SmartControllerClass::print_rule_table(int row)
 {
 	SERIAL_LN("===================");
-	SERIAL_LN("==== RT Row %d ====", row);
+	SERIAL_LN("==== RT-Row %d ====", row);
 
 	switch (Rule_table.get(row).op_flag)
 	{
@@ -2363,6 +2721,9 @@ void SmartControllerClass::print_rule_table(int row)
 	SERIAL_LN("SCT_uid = %d", Rule_table.get(row).SCT_uid);
 	SERIAL_LN("SNT_uid = %d", Rule_table.get(row).SNT_uid);
 	SERIAL_LN("notif_uid = %d", Rule_table.get(row).notif_uid);
+	SERIAL_LN("tmr_int = %d", Rule_table.get(row).tmr_int);
+	SERIAL_LN("tmr_started = %d", Rule_table.get(row).tmr_started);
+	SERIAL_LN("tmr_span = %d m", Rule_table.get(row).tmr_span);
 }
 
 //------------------------------------------------------------------

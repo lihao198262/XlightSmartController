@@ -40,6 +40,7 @@ test(serialconsole)
 
 test(cloudinput)
 {
+  /// Notes: if run in Cloud functions window, symbol \ should be removed
   /// Format_2: Multiple rows
   //theSys.CldJSONConfig("{'rows':2, 'data': [{'op':1, 'fl':0, 'run':0, 'uid':'s1', 'hue':0x0101080808080800}, {'op':1, 'fl':0, 'run':0, 'uid':'s1', 'hue':0x0201080808080800}, {'op':1, 'fl':0, 'run':0, 'uid':'s1', 'hue':0x0301080808080800}]");
 
@@ -50,12 +51,18 @@ test(cloudinput)
   theSys.CldJSONConfig("{'x1': '[1,0,0,0,255,0],\"ring2\":[1,0,0,0,255,0], '}");
   //// Last string: same as Format_1 or Format_2
   theSys.CldJSONConfig("\"ring3\":[1,0,0,0,255,0],\"brightness\":48,\"filter\":0}");
-
+  // {'x0': '{"op":1,"fl":0,"run":0,"uid\":"s4","ring1": '}
+  // {'x1': '[1,0,0,0,255,0],"ring2":[1,0,0,0,255,0], '}
+  // "ring3":[1,0,0,0,255,0],"brightness":48,"filter":0}
 
   //// Format_3 test case
-  theSys.CldJSONCommand("{'x0': '{\"cmd\":\"serial\", '}");
+  theSys.CldJSONCommand("{'x0': '{"cmd\":\"serial\", '}");
   theSys.CldJSONCommand("{'x1': '\"data\":\"check '}");
   theSys.CldJSONCommand("wifi\"}");
+  // {'x0': '{"cmd":"serial", '}
+  // {'x1': '"data":"check '}
+  // wifi"}
+
   //// Format_3 test case
   theSys.CldJSONCommand("{'x0': ' '}");
   theSys.CldJSONCommand("{'cmd':0, 'data':'show net'}");
@@ -67,6 +74,104 @@ test(cloudinput)
   theSys.CldSetCurrentTime("2016-08-31");
   theSys.CldSetCurrentTime("15:31:31");
   theSys.CldSetCurrentTime("sync");
+
+  //---------------------------------------------------
+  // Demo scenerio
+  // Example 1: Turn on the lights
+  theSys.CldJSONConfig("{'op':1, 'fl':0, 'run':0, 'uid':'s1','sw':1}");
+  // Execute scenerio to make sure it is saved immediatly
+  /// Option 1: could command
+  theSys.CldJSONCommand("{'cmd':4, 'node_id':1, 'SNT_id':1}");
+  /// Option 2: serial command
+  // send 1:15:1
+
+  // Example 2: Turn on the lights, 80% brightness and CCT=3500
+  theSys.CldJSONConfig("{'op':1, 'fl':0, 'run':0, 'uid':'s3','ring0':[1,80,3500,0,0,0]}");
+  // Execute scenerio to make sure it is saved immediatly
+  /// Option 1: could command
+  theSys.CldJSONCommand("{'cmd':4, 'node_id':1, 'SNT_id':1}");
+  /// Option 2: serial command
+  // send 1:15:1
+
+  // Example 3: Turn off the lights
+  theSys.CldJSONConfig("{'op':1, 'fl':0, 'run':0, 'uid':'s2','sw':0}");
+  // Execute scenerio to make sure it is saved immediatly
+  /// Option 1: could command
+  theSys.CldJSONCommand("{'cmd':4, 'node_id':1, 'SNT_id':2}");
+  /// Option 2: serial command
+  // send 1:15:2
+
+  // Demo schedule
+  // Example 1: 8:30am daily
+  theSys.CldJSONConfig("{'x0': '{\"op\":1, \"fl\":0, \"run\":0, \"uid\": \"a1\", \"isRepeat\":1, '}");
+  theSys.CldJSONConfig("\"weekdays\":0, \"hour\":8, \"minute\":30}");
+  //{'x0': '{"op":1, "fl":0, "run":0, "uid": "a1", "isRepeat":1, '}
+  // "weekdays":0, "hour":8, "minute":30}
+
+  // Example 2: 22:30pm daily
+  theSys.CldJSONConfig("{'x0': '{\"op\":1, \"fl\":0, \"run\":0, \"uid\": \"a2\", \"isRepeat\":1, '}");
+  theSys.CldJSONConfig("\"weekdays\":0, \"hour\":22, \"minute\":30}");
+
+  // Demo rules
+  // Condition rules
+  /// Example 1: if brightness (ALS) < 50, turn on the lights
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r1\",\"node_uid\": '}");
+  theSys.CldJSONConfig("{'x1': '1,\"SNT_uid\":1,\"tmr_int\":1, '}");
+  theSys.CldJSONConfig("\"cond0\":[1,1,4,2,1,50,0]}");
+  // condition0: [1(enable),1(SR_SCOPE_NODE),4(SR_SYM_LT),2(COND_SYM_OR),1(sensorALS),50(value1),0(value2)]
+
+  /// Example 2: if brightness (ALS) >= 80, turn off the lights
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r2\",\"node_uid\": '}");
+  theSys.CldJSONConfig("{'x1': '1,\"SNT_uid\":2,\"tmr_int\":1, '}");
+  theSys.CldJSONConfig("\"cond0\":[1,1,3,2,1,80,0]}");
+  // condition0: [1(enable),1(SR_SCOPE_NODE),3(SR_SYM_GE),2(COND_SYM_OR),1(sensorALS),80(value1),0(value2)]
+
+  /// Example 3: if detect motion (PIR == 1), turn on the lights
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r3\",\"node_uid\": '}");
+  theSys.CldJSONConfig("{'x1': '1,\"SNT_uid\":1,\"tmr_int\":1, '}");
+  theSys.CldJSONConfig("\"cond0\":[1,1,0,2,4,1,0]}");
+  // condition0: [1(enable),1(SR_SCOPE_NODE),0(SR_SYM_EQ),2(COND_SYM_OR),4(sensorPIR),1(value1),0(value2)]
+  //{'x0': '{"op":1,"fl":0,"run":0,"uid":"r3","node_uid": '}
+  // {'x1': '1,"SNT_uid":1,"tmr_int":1, '}
+  // "cond0":[1,1,0,2,4,1,0]}
+
+  /// Example 4: if no motion (PIR == 0), turn off the lights
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r4\",\"node_uid\": '}");
+  theSys.CldJSONConfig("{'x1': '1,\"SNT_uid\":2,\"tmr_int\":1, '}");
+  theSys.CldJSONConfig("\"cond0\":[1,1,0,2,4,0,0]}");
+  // condition0: [1(enable),1(SR_SCOPE_NODE),0(SR_SYM_EQ),2(COND_SYM_OR),4(sensorPIR),0(value1),0(value2)]
+  //{'x0': '{"op":1,"fl":0,"run":0,"uid":"r4","node_uid": '}
+  // {'x1': '1,"SNT_uid":2,"tmr_int":1, '}
+  // "cond0":[1,1,0,2,4,0,0]}
+
+  /// Example 5: if brightness (ALS) < 70 AND motion (PIR == 1), turn on the lights
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r1\",\"node_uid\": '}");
+  theSys.CldJSONConfig("{'x1': '1,\"SNT_uid\":1,\"tmr_int\":1, '}");
+  theSys.CldJSONConfig("{'x1': '\"cond0\":[1,1,4,1,1,70,0], '}");
+  theSys.CldJSONConfig("\"cond1\":[1,1,0,1,4,1,0]}");
+  // condition0: [1(enable),1(SR_SCOPE_NODE),4(SR_SYM_LT),1(COND_SYM_AND),1(sensorALS),70(value1),0(value2)]
+  // condition1: [1(enable),1(SR_SCOPE_NODE),0(SR_SYM_EQ),1(COND_SYM_AND),4(sensorPIR),1(value1),0(value2)]
+
+  /// Example 6: if brightness (ALS) >= 65 AND no motion (PIR == 0), turn off the lights
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r2\",\"node_uid\": '}");
+  theSys.CldJSONConfig("{'x1': '1,\"SNT_uid\":2,\"tmr_int\":1, '}");
+  theSys.CldJSONConfig("{'x1': '\"cond0\":[1,1,3,1,1,65,0], '}");
+  theSys.CldJSONConfig("\"cond1\":[1,1,0,1,4,0,0]}");
+  // condition0: [1(enable),1(SR_SCOPE_NODE),3(SR_SYM_GE),1(COND_SYM_AND),1(sensorALS),65(value1),0(value2)]
+  // condition1: [1(enable),1(SR_SCOPE_NODE),0(SR_SYM_EQ),1(COND_SYM_AND),4(sensorPIR),0(value1),0(value2)]
+
+  // Schedule rules
+  /// Example 1: turn on the lights at 8:30am daily
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r5\",\"node_uid\": '}");
+  theSys.CldJSONConfig("1,'\"SCT_uid\":1,\"SNT_uid\":1}");
+
+  /// Example 2: turn off the lights at 22:30pm daily
+  theSys.CldJSONConfig("{'x0': '{\"op\":1,\"fl\":0,\"run\":0,\"uid\":\"r5\",\"node_uid\": '}");
+  theSys.CldJSONConfig("1,'\"SCT_uid\":2,\"SNT_uid\":2}");
+
+  // Schedule & Condition rules
+  // with timer, ToDo:
+  //---------------------------------------------------
 }
 
 test(alarm_all_red)

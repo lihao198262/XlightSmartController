@@ -39,13 +39,13 @@ CDataQueue::CDataQueue()
 	m_pBuffer = NULL;
 	m_length = 0;
 	m_maxlen = 0;
+	m_pRead = 0;
+	m_pWrite = 0;
 }
 
-CDataQueue::CDataQueue(UL f_maxlen)
+CDataQueue::CDataQueue(US f_maxlen)
 {
-	m_pBuffer = NULL;
-	m_length = 0;
-	m_maxlen = 0;
+	CDataQueue();
 	CreateDataBuffer(f_maxlen);
 }
 
@@ -54,7 +54,7 @@ CDataQueue::~CDataQueue()
 	ClearBuffer();
 }
 
-void CDataQueue::CreateDataBuffer(UL f_nlen)
+void CDataQueue::CreateDataBuffer(US f_nlen)
 {
 	if( f_nlen > 0 )
 	{
@@ -64,38 +64,44 @@ void CDataQueue::CreateDataBuffer(UL f_nlen)
 		m_pBuffer = new UC[f_nlen];
 		m_length = 0;
 		m_maxlen = f_nlen;
+		m_pRead = 0;
+		m_pWrite = 0;
 		m_sync.Leave();
 	}
 }
 
-UL CDataQueue::GetMaxLength()
+US CDataQueue::GetMaxLength()
 {
-	UL lv_Value;
-
-	m_sync.Enter();
-	lv_Value = m_maxlen;
-	m_sync.Leave();
-
-	return lv_Value;
+	return m_maxlen;
 }
 
-void CDataQueue::SetMaxLength(UL f_maxlen)
+void CDataQueue::SetMaxLength(US f_maxlen)
 {
 	CreateDataBuffer(f_maxlen);
 }
 
-UL CDataQueue::Append(const UC* data, UL len)
+US CDataQueue::Append(const UC* data, US len)
 {
 	if (data == NULL || len <= 0 ) return 0;
 
-	UL lv_retval;
+	US lv_retval;
 
 	m_sync.Enter();
 	if( m_length + len > m_maxlen )
 		lv_retval = -1;
 	else
 	{
-		memcpy(m_pBuffer + m_length, data, len);
+		if( m_pWrite + len > m_maxlen ) {
+			US lv_first = m_maxlen - m_pWrite;
+			US lv_rest = len - lv_first;
+			memcpy(m_pBuffer + m_pWrite, data, lv_first);
+			memcpy(m_pBuffer, data + lv_first, lv_rest);
+			m_pWrite = lv_rest;
+		} else {
+			memcpy(m_pBuffer + m_pWrite, data, len);
+			m_pWrite += len;
+		}
+
 		m_length += len;
 		lv_retval = len;
 	}
@@ -104,40 +110,36 @@ UL CDataQueue::Append(const UC* data, UL len)
 	return lv_retval;
 }
 
-UL CDataQueue::Remove(UL f_first, UC* data)
+US CDataQueue::Remove(US f_first, UC* data)
 {
-	UL length = 0, copylen;
+	US copylen;
 
 	m_sync.Enter();
 
-	copylen = ( f_first > 0 ? f_first : m_length );
+	copylen = ( f_first > 0 ? min(f_first, m_length) : m_length );
 	if( copylen > 0 )
 	{
-		if( data != NULL )
+		if( m_pRead + copylen > m_maxlen )
 		{
-			//try
-			//{
-				memcpy(data, m_pBuffer, copylen);
-				length = copylen;
-			//}
-			/*
-			catch(...)
-			{
-				length = -1;
-			}*/
+			US lv_first = m_maxlen - m_pRead;
+			US lv_rest = copylen - lv_first;
+			memcpy(data, m_pBuffer + m_pRead, lv_first);
+			memcpy(data + lv_first, m_pBuffer, lv_rest);
+			m_pRead = lv_rest;
+		} else {
+			memcpy(data, m_pBuffer + m_pRead, copylen);
+			m_pRead += copylen;
 		}
 		m_length -= copylen;
-		if( m_length )
-			memmove(m_pBuffer, m_pBuffer + copylen, m_length);
 	}
 	m_sync.Leave();
 
-	return length;
+	return copylen;
 }
 
-UL CDataQueue::Length()
+US CDataQueue::Length()
 {
-	UL length;
+	US length;
 
 	m_sync.Enter();
 	length = m_length;
@@ -156,6 +158,8 @@ void CDataQueue::ClearBuffer()
 	}
 	m_length = 0;
 	m_maxlen = 0;
+	m_pRead = 0;
+	m_pWrite = 0;
 	m_sync.Leave();
 }
 

@@ -38,6 +38,8 @@
 #define RTE_DELAY_PUBLISH         60          // Maximum publish data refresh time in seconds
 #define RTE_DELAY_SYSTIMER        10          // System Timer interval, can be very fast, e.g. 50 means 25ms
 #define RTE_DELAY_SELFCHECK       100         // Self-check interval
+#define RTE_CLOUD_CONN_TIMEOUT    3500        // Timeout for connecting to the Cloud
+#define RTE_WIFI_CONN_TIMEOUT     20000       // Timeout for attempting to connect WIFI
 #define RTE_WATCHDOG_TIMEOUT      30000       // Maxium WD feed duration
 
 // Number of ticks on System Timer
@@ -51,7 +53,7 @@
 #define RTE_TM_HELD_TO_BASENW     5           // Held duration threshold to enable Base Network
 
 // Maximum number of rows for any working memory table implimented using ChainClass
-#define MAX_TABLE_SIZE    8
+#define MAX_TABLE_SIZE              8
 
 // Change it only if Config_t structure is updated
 #define VERSION_CONFIG_DATA         1
@@ -60,14 +62,20 @@
 #define MAX_DEVICE_PER_CONTROLLER   16
 
 // Maximum number of nodes under one controller
-#define MAX_NODE_PER_CONTROLLER   64
+#define MAX_NODE_PER_CONTROLLER     64
+
+// Maximum conditions within a rule
+#define MAX_CONDITION_PER_RULE      2
 
 // Default value for maxBaseNetworkDuration (in seconds)
 #define MAX_BASE_NETWORK_DUR    180
 
 // Maximum JSON data length
 #define COMMAND_JSON_SIZE				64
-#define SENSORDATA_JSON_SIZE			196
+#define SENSORDATA_JSON_SIZE		196
+
+// Maximum RF messages buffered
+#define MQ_MAX_RF_MSG           5
 
 // NodeID Convention
 #define NODEID_GATEWAY          0
@@ -76,6 +84,8 @@
 #define NODEID_MAX_DEVCIE       63
 #define NODEID_MIN_REMOTE       64
 #define NODEID_MAX_REMOTE       127
+#define NODEID_PROJECTOR        128
+#define NODEID_SMARTPHONE       139
 #define NODEID_DUMMY            255
 
 #define BR_MIN_VALUE            1

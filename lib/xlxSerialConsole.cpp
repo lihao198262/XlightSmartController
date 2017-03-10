@@ -171,7 +171,7 @@ bool SerialConsoleClass::processCommand()
 {
   bool retVal = readSerial();
   if( !retVal ) {
-    SERIAL_LN(F("Unknown command or incorrect arguments\n\r"));
+    SERIAL_LN("Unknown command or incorrect arguments\n\r");
   }
 
   return retVal;
@@ -179,7 +179,7 @@ bool SerialConsoleClass::processCommand()
 
 bool SerialConsoleClass::callbackCommand(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("do callback %s"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("do callback %s", cmd));
 
   return true;
 }
@@ -195,139 +195,147 @@ bool SerialConsoleClass::callbackDefault(const char *cmd)
 bool SerialConsoleClass::showThisHelp(String &strTopic)
 {
   if(strTopic.equals("check")) {
-    SERIAL_LN(F("--- Command: check <object> ---"));
-    SERIAL_LN(F("To check component status, where <object> could be:"));
-    SERIAL_LN(F("   ble:   check BLE module availability"));
-    SERIAL_LN(F("   flash: check flash space"));
-    SERIAL_LN(F("   rf:    check RF availability"));
-    SERIAL_LN(F("   wifi:  check Wi-Fi module status"));
-    SERIAL_LN(F("   wlan:  check internet status"));
-    SERIAL_LN(F("e.g. check rf\n\r"));
-    CloudOutput(F("check ble|flash|rf|wifi|wlan"));
+    SERIAL_LN("--- Command: check <object> ---");
+    SERIAL_LN("To check component status, where <object> could be:");
+    SERIAL_LN("   ble:   check BLE module availability");
+    SERIAL_LN("   flash: check flash space");
+    SERIAL_LN("   rf:    check RF availability");
+    SERIAL_LN("   wifi:  check Wi-Fi module status");
+    SERIAL_LN("   wlan:  check internet status");
+    SERIAL_LN("e.g. check rf\n\r");
+    CloudOutput("check ble|flash|rf|wifi|wlan");
   } else if(strTopic.equals("show")) {
-    SERIAL_LN(F("--- Command: show <object> ---"));
-    SERIAL_LN(F("To show value or summary information, where <object> could be:"));
-    SERIAL_LN(F("   ble:     show BLE summary"));
-    SERIAL_LN(F("   debug:   show debug channel and level"));
-    SERIAL_LN(F("   dev:     show device list"));
-    SERIAL_LN(F("   flag:    show system flags"));
-    SERIAL_LN(F("   net:     show network summary"));
-    SERIAL_LN(F("   node:    show node summary"));
-    SERIAL_LN(F("   button:  show button (knob) status"));
-    SERIAL_LN(F("   nlist:   show NodeID list"));
-    SERIAL_LN(F("   rf:      print RF details"));
-    SERIAL_LN(F("   time:    show current time and time zone"));
-    SERIAL_LN(F("   var:     show system variables"));
-    SERIAL_LN(F("   table:   show working memory tables"));
-    SERIAL_LN(F("   device:  show functional devices"));
-    SERIAL_LN(F("   remote:  show remotes"));
-    SERIAL_LN(F("   version: show firmware version"));
-    SERIAL_LN(F("e.g. show rf\n\r"));
-    CloudOutput(F("show ble|debug|dev|flag|net|node|rf|time|var|table|version"));
+    SERIAL_LN("--- Command: show <object> ---");
+    SERIAL_LN("To show value or summary information, where <object> could be:");
+    SERIAL_LN("   ble:     show BLE summary");
+    SERIAL_LN("   debug:   show debug channel and level");
+    SERIAL_LN("   flag:    show system flags");
+    SERIAL_LN("   net:     show network summary");
+    SERIAL_LN("   node:    show node summary");
+    SERIAL_LN("   button:  show button (knob) status");
+    SERIAL_LN("   nlist:   show NodeID list");
+    SERIAL_LN("   rf:      print RF details");
+    SERIAL_LN("   time:    show current time and time zone");
+    SERIAL_LN("   var:     show system variables");
+    SERIAL_LN("   table:   show working memory tables");
+    SERIAL_LN("   device:  show functional devices");
+    SERIAL_LN("   remote:  show remotes");
+    SERIAL_LN("   version: show firmware version");
+    SERIAL_LN("e.g. show rf\n\r");
+    CloudOutput("show ble|debug|dev|flag|net|node|rf|time|var|table|version");
   } else if(strTopic.equals("ping")) {
-    SERIAL_LN(F("--- Command: ping <address> ---"));
-    SERIAL_LN(F("To ping an IP or domain name, default address is 8.8.8.8"));
-    SERIAL_LN(F("e.g. ping www.google.com"));
-    SERIAL_LN(F("e.g. ping 192.168.0.1\n\r"));
-    CloudOutput(F("ping <address>"));
+    SERIAL_LN("--- Command: ping <address> ---");
+    SERIAL_LN("To ping an IP or domain name, default address is 8.8.8.8");
+    SERIAL_LN("e.g. ping www.google.com");
+    SERIAL_LN("e.g. ping 192.168.0.1\n\r");
+    CloudOutput("ping <address>");
   } else if(strTopic.equals("do")) {
-    SERIAL_LN(F("--- Command: do <action parameters> ---"));
-    SERIAL_LN(F("To execute action, e.g. turn on the lamp"));
-    SERIAL_LN(F("e.g. do on"));
-    SERIAL_LN(F("e.g. do off"));
-    SERIAL_LN(F("e.g. do color R,G,B\n\r"));
-    CloudOutput(F("do on|off|color"));
+    SERIAL_LN("--- Command: do <action parameters> ---");
+    SERIAL_LN("To execute action, e.g. turn on the lamp");
+    SERIAL_LN("e.g. do on");
+    SERIAL_LN("e.g. do off");
+    SERIAL_LN("e.g. do color R,G,B\n\r");
+    CloudOutput("do on|off|color");
   } else if(strTopic.equals("test")) {
-    SERIAL_LN(F("--- Command: test <action parameters> ---"));
-    SERIAL_LN(F("To perform testing, where <action> could be:"));
-    SERIAL_LN(F("   ledring [0:5]: check brightness LED indicator"));
-    SERIAL_LN(F("   ledrgb: check status RGB LED"));
-    SERIAL_LN(F("   ping <ip address>: ping ip address"));
-    SERIAL_LN(F("   send <NodeId:MessageId>: send test message to node"));
-    SERIAL_LN(F("   send <message>: send MySensors format message"));
-    SERIAL_LN(F("   asr <cmd>: send command to ASR module\n\r"));
-    CloudOutput(F("test ping|send"));
+    SERIAL_LN("--- Command: test <action parameters> ---");
+    SERIAL_LN("To perform testing, where <action> could be:");
+    SERIAL_LN("   ledring [0:5]: check brightness LED indicator");
+    SERIAL_LN("   ledrgb: check status RGB LED");
+    SERIAL_LN("   ping <ip address>: ping ip address");
+    SERIAL_LN("   send <NodeId:MessageId[:Payload]>: send test message to node");
+    SERIAL_LN("   send <message>: send MySensors format message");
+    SERIAL_LN("   asr <cmd>: send command to ASR module\n\r");
+    CloudOutput("test ping|send");
   } else if(strTopic.equals("send")) {
-    SERIAL_LN(F("--- Command: send <message> or <NodeId:MessageId> ---"));
-    SERIAL_LN(F("To send testing message"));
-    SERIAL_LN(F("e.g. send 0:1"));
-    SERIAL_LN(F("e.g. send 0;1;0;0;6;"));
-    SERIAL_LN(F("e.g. send 0;1;1;0;0;23.5\n\r"));
-    CloudOutput(F("send <message> or <NodeId:MessageId>"));
+    SERIAL_LN("--- Command: send <message> or <NodeId:MessageId[:Payload]> ---");
+    SERIAL_LN("To send testing message");
+    SERIAL_LN("e.g. send 0:1");
+    SERIAL_LN("e.g. send 0;1;0;0;6;");
+    SERIAL_LN("e.g. send 0;1;1;0;0;23.5\n\r");
+    CloudOutput("send <msg> or <NodeId:MsgId[:Pload]>");
   } else if(strTopic.equals("set")) {
     char *sObj = next();
     if( sObj ) {
       if (strnicmp(sObj, "flag", 4) == 0) {
-        SERIAL_LN(F("--- Command: set flag <flag name> [0|1] ---"));
-        SERIAL_LN(F("<flag name>: csc, cdts"));
-        SERIAL_LN(F("e.g. set flag csc [0|1]"));
-        SERIAL_LN(F("     , enable or disable Cloud Serial Command"));
-        SERIAL_LN(F("e.g. set flag cdts [0|1]"));
-        SERIAL_LN(F("     , enable or disable Cloud Daily Time Sync"));
-        CloudOutput(F("set flag csc|cdts"));
+        SERIAL_LN("--- Command: set flag <flag name> [0|1] ---");
+        SERIAL_LN("<flag name>: csc, cdts");
+        SERIAL_LN("e.g. set flag csc [0|1]");
+        SERIAL_LN("     , enable or disable Cloud Serial Command");
+        SERIAL_LN("e.g. set flag cdts [0|1]");
+        SERIAL_LN("     , enable or disable Cloud Daily Time Sync");
+        CloudOutput("set flag csc|cdts");
       } else if (strnicmp(sObj, "var", 3) == 0) {
-        SERIAL_LN(F("--- Command: set var <var name> <value> ---"));
-        SERIAL_LN(F("<var name>: senmap, devst, rfpl"));
-        SERIAL_LN(F("e.g. set var senmap 23"));
-        SERIAL_LN(F("     , set Sensor Bitmap to 0x17"));
-        SERIAL_LN(F("e.g. set var devst 5"));
-        SERIAL_LN(F("     , set Device Status to sleep mode"));
-        SERIAL_LN(F("e.g. set var rfpl [0..3]"));
-        SERIAL_LN(F("     , set RF Power Level to min(0), low(1), high(2) or max(3)"));
-        CloudOutput(F("set var senmap|devst|rfpl"));
+        SERIAL_LN("--- Command: set var <var name> <value> ---");
+        SERIAL_LN("<var name>: senmap, devst, rfpl");
+        SERIAL_LN("e.g. set var senmap 23");
+        SERIAL_LN("     , set Sensor Bitmap to 0x17");
+        SERIAL_LN("e.g. set var devst 5");
+        SERIAL_LN("     , set Device Status to sleep mode");
+        SERIAL_LN("e.g. set var rfpl [0..3]");
+        SERIAL_LN("     , set RF Power Level to min(0), low(1), high(2) or max(3)");
+        CloudOutput("set var senmap|devst|rfpl");
       } else if (strnicmp(sObj, "spkr", 4) == 0) {
-        SERIAL_LN(F("--- Command: set spkr [0|1] ---"));
-        SERIAL_LN(F("To disable or enable speaker"));
-        CloudOutput(F("set spkr 0|1"));
+        SERIAL_LN("--- Command: set spkr [0|1] ---");
+        SERIAL_LN("To disable or enable speaker");
+        CloudOutput("set spkr 0|1");
+      } else if (strnicmp(sObj, "cloud", 5) == 0) {
+        SERIAL_LN("--- Command: set cloud [0|1|2] ---");
+        SERIAL_LN("To disable, enable or require cloud");
+        CloudOutput("set cloud 0|1|2");
       }
     } else {
-      SERIAL_LN(F("--- Command: set <object value> ---"));
-      SERIAL_LN(F("To change config"));
-      SERIAL_LN(F("e.g. set tz -5"));
-      SERIAL_LN(F("e.g. set dst [0|1]"));
-      SERIAL_LN(F("     , set daylight saving time"));
-      SERIAL_LN(F("e.g. set time sync"));
-      SERIAL_LN(F("     , synchronize time with Cloud"));
-      SERIAL_LN(F("e.g. set time hh:mm:ss"));
-      SERIAL_LN(F("e.g. set date YYYY-MM-DD"));
-      SERIAL_LN(F("e.g. set nodeid [0..250]"));
-      SERIAL_LN(F("e.g. set base [0|1]"));
-      SERIAL_LN(F("     , to enable or disable base network"));
-      SERIAL_LN(F("e.g. set maxebn <duration>"));
-      SERIAL_LN(F("     , to set maximum base network enable duration"));
-      SERIAL_LN(F("e.g. set spkr [0|1]"));
-      SERIAL_LN(F("     , to enable or disable speaker"));
-      SERIAL_LN(F("set flag <flag name> [0|1]"));
-      SERIAL_LN(F("     , to set system flag value, use '? set flag' for detail"));
-      SERIAL_LN(F("set var <var name> <value>"));
-      SERIAL_LN(F("     , to set value of variable, use '? set var' for detail"));
-      SERIAL_LN(F("e.g. set debug [log:level]"));
-      SERIAL_LN(F("     , where log is [serial|flash|syslog|cloud|all"));
-      SERIAL_LN(F("     and level is [none|alter|critical|error|warn|notice|info|debug]\n\r"));
-      CloudOutput(F("set tz|dst|nodeid|base|spkr|flag|var|debug"));
+      SERIAL_LN("--- Command: set <object value> ---");
+      SERIAL_LN("To change config");
+      SERIAL_LN("e.g. set tz -5");
+      SERIAL_LN("e.g. set dst [0|1]");
+      SERIAL_LN("     , set daylight saving time");
+      SERIAL_LN("e.g. set time sync");
+      SERIAL_LN("     , synchronize time with Cloud");
+      SERIAL_LN("e.g. set time hh:mm:ss");
+      SERIAL_LN("e.g. set date YYYY-MM-DD");
+      SERIAL_LN("e.g. set nodeid [0..250]");
+      SERIAL_LN("e.g. set base [0|1]");
+      SERIAL_LN("     , to enable or disable base network");
+      SERIAL_LN("e.g. set maxebn <duration>");
+      SERIAL_LN("     , to set maximum base network enable duration");
+      SERIAL_LN("e.g. set spkr [0|1]");
+      SERIAL_LN("     , to enable or disable speaker");
+      SERIAL_LN("set flag <flag name> [0|1]");
+      SERIAL_LN("     , to set system flag value, use '? set flag' for detail");
+      SERIAL_LN("set var <var name> <value>");
+      SERIAL_LN("     , to set value of variable, use '? set var' for detail");
+      SERIAL_LN("e.g. set cloud [0|1|2]");
+      SERIAL_LN("     , cloud option disable|enable|must");
+      SERIAL_LN("e.g. set maindev <nodeid>");
+      SERIAL_LN("     , to change the main device");
+      SERIAL_LN("e.g. set debug [log:level]");
+      SERIAL_LN("     , where log is [serial|flash|syslog|cloud|all");
+      SERIAL_LN("     and level is [none|alter|critical|error|warn|notice|info|debug]\n\r");
+      CloudOutput("set tz|dst|nodeid|base|spkr|flag|var|cloud|maindev|debug");
     }
   } else if(strTopic.equals("sys")) {
-    SERIAL_LN(F("--- Command: sys <mode> ---"));
-    SERIAL_LN(F("To control the system status, where <mode> could be:"));
-    SERIAL_LN(F("   base <duration>: switch to base network and accept new device for <duration=60> seconds"));
-    SERIAL_LN(F("   private: switch to private network"));
-    SERIAL_LN(F("   reset:   reset the system"));
-    SERIAL_LN(F("   safe:    enter safe/recover mode"));
-    SERIAL_LN(F("   setup:   setup Wi-Fi crediential"));
-    SERIAL_LN(F("   dfu:     enter DFU mode"));
-    SERIAL_LN(F("   update:  update firmware"));
-    SERIAL_LN(F("   serial reset: reset serial port"));
-    SERIAL_LN(F("   sync <object>: object synchronize with Cloud"));
-    SERIAL_LN(F("   clear <object>: clear object, such as nodeid"));
-    SERIAL_LN(F("e.g. sys sync time"));
-    SERIAL_LN(F("e.g. sys clear nodeid 1"));
-    SERIAL_LN(F("e.g. sys reset\n\r"));
-    CloudOutput(F("sys base|private|reset|safe|setup|dfu|update|serial|sync|clear"));
+    SERIAL_LN("--- Command: sys <mode> ---");
+    SERIAL_LN("To control the system status, where <mode> could be:");
+    SERIAL_LN("   base <duration>: switch to base network and accept new device for <duration=60> seconds");
+    SERIAL_LN("   private: switch to private network");
+    SERIAL_LN("   reset:   reset the system");
+    SERIAL_LN("   safe:    enter safe/recover mode");
+    SERIAL_LN("   setup:   setup Wi-Fi crediential");
+    SERIAL_LN("   dfu:     enter DFU mode");
+    SERIAL_LN("   update:  update firmware");
+    SERIAL_LN("   serial reset: reset serial port");
+    SERIAL_LN("   sync <object>: object synchronize with Cloud");
+    SERIAL_LN("   clear <object>: clear object, such as nodeid");
+    SERIAL_LN("e.g. sys sync time");
+    SERIAL_LN("e.g. sys clear nodeid 1");
+    SERIAL_LN("e.g. sys clear credientials");
+    SERIAL_LN("e.g. sys reset\n\r");
+    CloudOutput("sys base|private|reset|safe|setup|dfu|update|serial|sync|clear");
   } else {
-    SERIAL_LN(F("Available Commands:"));
-    SERIAL_LN(F("    check, show, ping, do, test, send, set, sys, help or ?"));
-    SERIAL_LN(F("Use 'help <command>' for more information\n\r"));
-    CloudOutput(F("check, show, ping, do, test, send, set, sys, help or ?"));
+    SERIAL_LN("Available Commands:");
+    SERIAL_LN("    check, show, ping, do, test, send, set, sys, help or ?");
+    SERIAL_LN("Use 'help <command>' for more information\n\r");
+    CloudOutput("check, show, ping, do, test, send, set, sys, help or ?");
   }
 
   return true;
@@ -335,7 +343,7 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
 
 bool SerialConsoleClass::doHelp(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doHelp(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doHelp(%s)\n\r", cmd));
 
   String strTopic = "";
   char *sTopic = next();
@@ -357,7 +365,7 @@ bool SerialConsoleClass::doHelp(const char *cmd)
 // check - Check commands
 bool SerialConsoleClass::doCheck(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doCheck(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doCheck(%s)\n\r", cmd));
 
   bool retVal = true;
 
@@ -396,7 +404,7 @@ bool SerialConsoleClass::doCheck(const char *cmd)
 // show - Show commands: config, status, variable, statistic data, etc.
 bool SerialConsoleClass::doShow(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doShow(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doShow(%s)\n\r", cmd));
 
   bool retVal = true;
   char strDisplay[64];
@@ -419,6 +427,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
         SERIAL("  Gateway IP: ");
         TheSerial.println(WiFi.gatewayIP());
         SERIAL_LN("  SSID: %s", WiFi.SSID());
+        SERIAL_LN("  Cloud %s", Particle.connected() ? "connected" : "disconnected");
       }
       SERIAL_LN("");
       CloudOutput("RF NetworkID %s, MAC %s, SSID %s",
@@ -453,6 +462,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
 		SERIAL_LN("theSys.mSysID = \t\t\t%s", theSys.m_SysID.c_str());
 		SERIAL_LN("theSys.m_SysVersion = \t\t\t%s", theSys.m_SysVersion.c_str());
 		SERIAL_LN("theSys.m_SysStatus = \t\t\t%d", theSys.m_SysStatus);
+    SERIAL_LN("theConfig.useCloud = \t\t\t%d", theConfig.GetUseCloud());
 		SERIAL_LN("theSys.m_tzString = \t\t\t%s", theSys.m_tzString.c_str());
 		SERIAL_LN("theSys.m_jsonData = \t\t\t%s", theSys.m_jsonData.c_str());
     SERIAL_LN("theSys.m_strCldCmd = \t\t%s\n\r", theSys.m_strCldCmd.c_str());
@@ -466,6 +476,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
 		SERIAL_LN("theSys.m_brightness = \t\t\t%u", theSys.m_brightness);
 		SERIAL_LN("theSys.m_motion = \t\t\t%s", (theSys.m_motion ? "true" : "false"));
     SERIAL_LN("");
+    SERIAL_LN("Main DeviceID = \t\t\t%d", CURRENT_DEVICE);
     SERIAL_LN("mConfig.typeMainDevice = \t\t%d", theConfig.GetMainDeviceType());
     SERIAL_LN("mConfig.numDevices = \t\t\t%d", theConfig.GetNumDevices());
     SERIAL_LN("mConfig.numNodes = \t\t\t%d", theConfig.GetNumNodes());
@@ -480,6 +491,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
     SERIAL_LN("mConfig.enableDailyTimeSync = \t\t%s", (theConfig.IsDailyTimeSyncEnabled() ? "true" : "false"));
     SERIAL_LN("mConfig.enableSpeaker = \t\t%s", (theConfig.IsSpeakerEnabled() ? "true" : "false"));
     SERIAL_LN("theRadio._bBaseNetworkEnabled = \t%s", (theRadio.isBaseNetworkEnabled() ? "true" : "false"));
+    SERIAL_LN("theConfig.stWiFi = \t\t\t%s", (theConfig.GetWiFiStatus() ? "On" : "Off"));
     SERIAL_LN("");
 		SERIAL_LN("theConfig.m_isLoaded = \t\t\t%s", (theConfig.IsConfigLoaded() ? "true" : "false"));
 		SERIAL_LN("theConfig.m_isChanged = \t\t%s", (theConfig.IsConfigChanged() ? "true" : "false"));
@@ -496,25 +508,25 @@ bool SerialConsoleClass::doShow(const char *cmd)
 		SERIAL_LN("SNT_ROW_SIZE: \t\t\t\t%u", SNT_ROW_SIZE);
 
 		SERIAL_LN("");
-		SERIAL_LN("DevStatus_table: ");
-			for (int i = 0; i < theSys.DevStatus_table.size(); i++)
-				theSys.print_devStatus_table(i);
-		SERIAL_LN("");
-		SERIAL_LN("Rule_table: ");
-			for (int i = 0; i < theSys.Rule_table.size(); i++)
-				theSys.print_rule_table(i);
-		SERIAL_LN("");
-		SERIAL_LN("Schedule_table: ");
-			for (int i = 0; i < theSys.Schedule_table.size(); i++)
-				theSys.print_schedule_table(i);
-		SERIAL_LN("");
-		SERIAL_LN("Scenario_table: ");
-			for (int i = 0; i < theSys.Scenario_table.size(); i++)
-				theSys.print_scenario_table(i);
-		SERIAL_LN("");
+    SERIAL_LN("DevStatus_table %d items:", theSys.DevStatus_table.size());
+    for (int i = 0; i < theSys.DevStatus_table.size(); i++)
+      theSys.print_devStatus_table(i);
+    SERIAL_LN("");
+    SERIAL_LN("Rule_table %d items:", theSys.Rule_table.size());
+    for (int i = 0; i < theSys.Rule_table.size(); i++)
+      theSys.print_rule_table(i);
+    SERIAL_LN("");
+    SERIAL_LN("Schedule_table %d items:", theSys.Schedule_table.size());
+    for (int i = 0; i < theSys.Schedule_table.size(); i++)
+      theSys.print_schedule_table(i);
+    SERIAL_LN("");
+    SERIAL_LN("Scenario_table %d items:", theSys.Scenario_table.size());
+    for (int i = 0; i < theSys.Scenario_table.size(); i++)
+      theSys.print_scenario_table(i);
+    SERIAL_LN("");
   } else if (strnicmp(sTopic, "device", 6) == 0) {
     SERIAL_LN("DST_ROW_SIZE: \t\t\t\t%u, items: %d", DST_ROW_SIZE, theSys.DevStatus_table.size());
-    SERIAL_LN("DevStatus_table: ");
+    SERIAL_LN("DevStatus_table:");
     CloudOutput(theSys.print_devStatus_table(0));
 		for (int i = 1; i < theSys.DevStatus_table.size(); i++) {
 			theSys.print_devStatus_table(i);
@@ -551,7 +563,7 @@ bool SerialConsoleClass::doPing(const char *cmd)
 // do - execute action, e.g. turn on the lamp
 bool SerialConsoleClass::doAction(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doAction(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doAction(%s)\n\r", cmd));
 
   bool retVal = false;
 
@@ -578,7 +590,7 @@ bool SerialConsoleClass::doAction(const char *cmd)
 // test - Test commands, e.g. ping
 bool SerialConsoleClass::doTest(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doTest(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doTest(%s)\n\r", cmd));
 
   bool retVal = false;
 
@@ -593,7 +605,7 @@ bool SerialConsoleClass::doTest(const char *cmd)
       UC testNo = 0;
       sParam = next();
       if( sParam) { testNo = (UC)atoi(sParam); }
-      SERIAL(F("Checking brightness indicator LEDs..."));
+      SERIAL("Checking brightness indicator LEDs...");
       SERIAL_LN("%s\n\r", thePanel.CheckLEDRing(testNo) ? "done" : "error");
       retVal = true;
     } else if (strnicmp(sTopic, "ledrgb", 6) == 0) {
@@ -620,7 +632,7 @@ bool SerialConsoleClass::doTest(const char *cmd)
 // send - Send message, shortcut of test send
 bool SerialConsoleClass::doSend(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doSend(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doSend(%s)\n\r", cmd));
 
   bool retVal = false;
 
@@ -637,7 +649,7 @@ bool SerialConsoleClass::doSend(const char *cmd)
 // set - Config command
 bool SerialConsoleClass::doSet(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doSet(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doSet(%s)\n\r", cmd));
 
   bool retVal = false;
 
@@ -769,6 +781,30 @@ bool SerialConsoleClass::doSet(const char *cmd)
         SERIAL_LN("Require spkr flag value [0|1], use '? set spkr' for detail\n\r");
         retVal = true;
       }
+    } else if (strnicmp(sTopic, "cloud", 5) == 0) {
+      // Cloud Option
+      sParam1 = next();
+      if( sParam1) {
+        theConfig.SetUseCloud(atoi(sParam1));
+        SERIAL_LN("Cloud option set to %d\n\r", theConfig.GetUseCloud());
+        CloudOutput("Cloud option %d", theConfig.GetUseCloud());
+        retVal = true;
+      } else {
+        SERIAL_LN("Require Cloud option [0|1|2], use '? set cloud' for detail\n\r");
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "maindev", 7) == 0) {
+      // Cloud Option
+      sParam1 = next();
+      if( sParam1) {
+        theConfig.SetMainDeviceID(atoi(sParam1));
+        SERIAL_LN("Main device changed to %d\n\r", CURRENT_DEVICE);
+        CloudOutput("MainDev: %d", CURRENT_DEVICE);
+        retVal = true;
+      } else {
+        SERIAL_LN("Require a valid nodeID\n\r");
+        retVal = true;
+      }
     } else if (strnicmp(sTopic, "debug", 5) == 0) {
       sParam1 = next();
       if( sParam1) {
@@ -788,7 +824,7 @@ bool SerialConsoleClass::doSet(const char *cmd)
 // sys - System control
 bool SerialConsoleClass::doSys(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doSys(%s)\n\r"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doSys(%s)\n\r", cmd));
 
   // Interpret deeply
   return scanStateMachine();
@@ -796,25 +832,25 @@ bool SerialConsoleClass::doSys(const char *cmd)
 
 bool SerialConsoleClass::doSysSub(const char *cmd)
 {
-  IF_SERIAL_DEBUG(SERIAL_LN(F("doSysSub(%s)"), cmd));
+  IF_SERIAL_DEBUG(SERIAL_LN("doSysSub(%s)", cmd));
 
   char strDisplay[64];
   const char *sTopic = CommandList[currentCommand].event;
   char *sParam1;
   if( sTopic ) {
     if (strnicmp(sTopic, "reset", 5) == 0) {
-      SERIAL_LN(F("System is about to reset..."));
+      SERIAL_LN("System is about to reset...");
       CloudOutput("System is about to reset");
       theSys.Restart();
     }
     else if (strnicmp(sTopic, "safe", 4) == 0) {
-      SERIAL_LN(F("System is about to enter safe mode..."));
+      SERIAL_LN("System is about to enter safe mode...");
       CloudOutput("System is about to enter safe mode");
       delay(1000);
       System.enterSafeMode();
     }
     else if (strnicmp(sTopic, "dfu", 3) == 0) {
-      SERIAL_LN(F("System is about to enter DFU mode..."));
+      SERIAL_LN("System is about to enter DFU mode...");
       CloudOutput("System is about to enter DFU mode");
       delay(1000);
       System.dfu();
@@ -857,6 +893,10 @@ bool SerialConsoleClass::doSysSub(const char *cmd)
               SERIAL_LN("Failed to clear NodeID:%s\n\r", sParam1);
               CloudOutput("Failed to clear NodeID:%s", sParam1);
             }
+          } else if( stricmp(sParam1, "credientials") == 0 ) {
+            WiFi.clearCredentials();
+            SERIAL_LN("WiFi credientials cleared\n\r");
+            CloudOutput("WiFi credientials cleared");
           } else {
             return false;
           }
@@ -870,14 +910,14 @@ bool SerialConsoleClass::doSysSub(const char *cmd)
     else if (strnicmp(sTopic, "base", 4) == 0) {
       // Switch to Base Network
       theRadio.switch2BaseNetwork();
-      SERIAL_LN(F("Switched to base network\n\r"));
-      CloudOutput(F("Switched to base network"));
+      SERIAL_LN("Switched to base network\n\r");
+      CloudOutput("Switched to base network");
     }
     else if (strnicmp(sTopic, "private", 7) == 0) {
       // Switch to Private Network
       theRadio.switch2MyNetwork();
-      SERIAL_LN(F("Switched to private network: %s\n\r"), PrintUint64(strDisplay, theRadio.getCurrentNetworkID()));
-      CloudOutput(F("Switched to private network"));
+      SERIAL_LN("Switched to private network: %s\n\r", PrintUint64(strDisplay, theRadio.getCurrentNetworkID()));
+      CloudOutput("Switched to private network");
     }
   } else { return false; }
 
@@ -944,7 +984,7 @@ bool SerialConsoleClass::SetupWiFi(const char *cmd)
 
 bool SerialConsoleClass::SetWiFiCredential(const char *cmd)
 {
-  WiFi.listen();
+  //WiFi.listen();
   if( gintWiFi_Auth = 0 ) {
     WiFi.setCredentials(gstrWiFi_SSID);
   } else if( gintWiFi_Auth = 1 ) {
@@ -954,11 +994,10 @@ bool SerialConsoleClass::SetWiFiCredential(const char *cmd)
   } else if( gintWiFi_Auth = 3 ) {
     WiFi.setCredentials(gstrWiFi_SSID, gstrWiFi_Password, WPA, WLAN_CIPHER_TKIP);
   }
-  SERIAL("Wi-Fi credential saved...reconnecting...");
-  CloudOutput("Wi-Fi credential saved...reconnecting");
-  WiFi.connect();
-  SERIAL_LN("%s", (WiFi.ready() ? "OK" : "Failed"));
-
+  SERIAL("Wi-Fi credential saved");
+  WiFi.listen(false);
+  theSys.connectWiFi();
+  CloudOutput("Wi-Fi credential saved, reconnect %s", WiFi.ready() ? "OK" : "Failed");
   return true;
 }
 

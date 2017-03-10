@@ -117,7 +117,8 @@ void NodeListClass::showList()
 	char strDisplay[64];
 	UL lv_now = Time.now();
 	for(int i=0; i < _count; i++) {
-		SERIAL_LN("No.%d - NodeID: %d (%s) actived %ds ago", i,
+		SERIAL_LN("%cNo.%d - NodeID: %d (%s) actived %ds ago",
+				_pItems[i].nid == CURRENT_DEVICE ? '*' : ' ', i,
 		    _pItems[i].nid, PrintMacAddress(strDisplay, _pItems[i].identity),
 				(_pItems[i].recentActive > 0 ? lv_now - _pItems[i].recentActive : -1));
 	}
@@ -276,14 +277,15 @@ void ConfigClass::InitConfig()
   m_config.timeZone.offset = -300;        // -5 hours
   m_config.timeZone.dst = 1;              // 1 or 0
   m_config.sensorBitmap = 0;
-	BITSET(m_config.sensorBitmap, sensorDHT);
-	//BITSET(m_config.sensorBitmap, sensorALS);
-	//BITSET(m_config.sensorBitmap, sensorMIC);
-	//BITSET(m_config.sensorBitmap, sensorPIR);
+	SetSensorEnabled(sensorDHT);
+	SetSensorEnabled(sensorALS);
+	//SetSensorEnabled(sensorMIC);
+	SetSensorEnabled(sensorPIR);
   strcpy(m_config.Organization, XLA_ORGANIZATION);
   strcpy(m_config.ProductName, XLA_PRODUCT_NAME);
   strcpy(m_config.Token, XLA_TOKEN);
   m_config.indBrightness = 0;
+	m_config.mainDevID = NODEID_MAINDEVICE;
   m_config.typeMainDevice = (UC)devtypWRing3;
   m_config.numDevices = 1;
   m_config.numNodes = 2;	// One main device( the smart lamp) and one remote control
@@ -292,6 +294,8 @@ void ConfigClass::InitConfig()
 	m_config.enableDailyTimeSync = true;
 	m_config.rfPowerLevel = RF24_PA_LEVEL_GW;
 	m_config.maxBaseNetworkDuration = MAX_BASE_NETWORK_DUR;
+	m_config.useCloud = CLOUD_ENABLE;
+	m_config.stWiFi = 1;
 }
 
 BOOL ConfigClass::InitDevStatus(UC nodeID)
@@ -359,22 +363,24 @@ BOOL ConfigClass::LoadConfig()
 			|| m_config.numNodes > MAX_NODE_PER_CONTROLLER
       || m_config.typeMainDevice == devtypUnknown
       || m_config.typeMainDevice >= devtypDummy
-			|| m_config.rfPowerLevel > RF24_PA_MAX )
+			|| m_config.rfPowerLevel > RF24_PA_MAX
+		 	|| m_config.useCloud > CLOUD_MUST_CONNECT
+		 	|| (IS_NOT_DEVICE_NODEID(m_config.mainDevID) && m_config.mainDevID != NODEID_DUMMY) )
     {
       InitConfig();
       m_isChanged = true;
-      LOGW(LOGTAG_MSG, F("Sysconfig is empty, use default settings."));
+      LOGW(LOGTAG_MSG, "Sysconfig is empty, use default settings.");
       SaveConfig();
     }
     else
     {
-      LOGI(LOGTAG_MSG, F("Sysconfig loaded."));
+      LOGI(LOGTAG_MSG, "Sysconfig loaded.");
     }
     m_isLoaded = true;
     m_isChanged = false;
 		UpdateTimeZone();
   } else {
-    LOGE(LOGTAG_MSG, F("Failed to load Sysconfig, too large."));
+    LOGE(LOGTAG_MSG, "Failed to load Sysconfig, too large.");
   }
 
 	// Load Device Status
@@ -401,7 +407,7 @@ BOOL ConfigClass::SaveConfig()
   {
     EEPROM.put(MEM_CONFIG_OFFSET, m_config);
     m_isChanged = false;
-    LOGI(LOGTAG_MSG, F("Sysconfig saved."));
+    LOGI(LOGTAG_MSG, "Sysconfig saved.");
   }
 
 	// Save Device Status
@@ -725,6 +731,25 @@ BOOL ConfigClass::SetBrightIndicator(UC level)
   return false;
 }
 
+UC ConfigClass::GetMainDeviceID()
+{
+	return m_config.mainDevID;
+}
+
+BOOL ConfigClass::SetMainDeviceID(UC devID)
+{
+	if( IS_NOT_DEVICE_NODEID(devID) && devID != NODEID_DUMMY )
+		return false;
+
+  if( devID != m_config.mainDevID )
+  {
+    m_config.mainDevID = devID;
+		theSys.FindCurrentDevice();		// Refresh current device pointer
+    m_isChanged = true;
+  }
+  return true;
+}
+
 UC ConfigClass::GetMainDeviceType()
 {
   return m_config.typeMainDevice;
@@ -798,6 +823,37 @@ BOOL ConfigClass::SetMaxBaseNetworkDur(US dur)
 	return false;
 }
 
+UC ConfigClass::GetUseCloud()
+{
+	return m_config.useCloud;
+}
+
+BOOL ConfigClass::SetUseCloud(UC opt)
+{
+	if( opt != m_config.useCloud && opt <= CLOUD_MUST_CONNECT ) {
+		m_config.useCloud = opt;
+		m_isChanged = true;
+		return true;
+	}
+	return false;
+}
+
+BOOL ConfigClass::GetWiFiStatus()
+{
+  return m_config.stWiFi;
+}
+
+BOOL ConfigClass::SetWiFiStatus(BOOL _st)
+{
+  if( _st != m_config.stWiFi ) {
+    m_config.stWiFi = _st;
+    m_isChanged = true;
+		LOGN(LOGTAG_STATUS, "Wi-Fi status set to %d", _st);
+    return true;
+  }
+  return false;
+}
+
 UC ConfigClass::GetRFPowerLevel()
 {
 	return m_config.rfPowerLevel;
@@ -837,7 +893,7 @@ BOOL ConfigClass::LoadDeviceStatus()
 				}
 				else
 				{
-					LOGW(LOGTAG_MSG, F("DevStatus row %d failed to load from flash"), i);
+					LOGW(LOGTAG_MSG, "DevStatus row %d failed to load from flash", i);
 				}
 			}
 		}
@@ -848,20 +904,20 @@ BOOL ConfigClass::LoadDeviceStatus()
 		{
 			if( InitDevStatus(NODEID_MAINDEVICE) ) {
 				m_isDSTChanged = true;
-				LOGW(LOGTAG_MSG, F("Device status table blank, loaded default status."));
+				LOGW(LOGTAG_MSG, "Device status table blank, loaded default status.");
 				SaveConfig();
 			}
 		}
 		else
 		{
-			LOGD(LOGTAG_MSG, F("Device status table loaded."));
+			LOGD(LOGTAG_MSG, "Device status table loaded.");
 		}
 
 		m_isDSTChanged = false;
 	}
 	else
 	{
-		LOGW(LOGTAG_MSG, F("Failed to load device status table, too large."));
+		LOGW(LOGTAG_MSG, "Failed to load device status table, too large.");
 		return false;
 	}
 
@@ -909,7 +965,7 @@ BOOL ConfigClass::SaveDeviceStatus()
 				}
 				else
 				{
-					LOGE(LOGTAG_MSG, F("Error, cannot write DevStatus row %d to flash, out of memory bounds"), row_index);
+					LOGE(LOGTAG_MSG, "Error, cannot write DevStatus row %d to flash, out of memory bounds", row_index);
 					success_flag = false;
 				}
 			}
@@ -918,11 +974,11 @@ BOOL ConfigClass::SaveDeviceStatus()
 		if (success_flag)
 		{
 			m_isDSTChanged = false;
-			LOGD(LOGTAG_MSG, F("Device status table saved."));
+			LOGD(LOGTAG_MSG, "Device status table saved.");
 		}
 		else
 		{
-			LOGE(LOGTAG_MSG, F("Unable to write 1 or more Device status table rows to flash"));
+			LOGE(LOGTAG_MSG, "Unable to write 1 or more Device status table rows to flash");
 		}
 	}
 }
@@ -970,7 +1026,7 @@ BOOL ConfigClass::SaveScheduleTable()
 			  }
 			  else
 			  {
-				  LOGE(LOGTAG_MSG, F("Error, cannot write Schedule row %d to flash, out of memory bounds"), row_index);
+				  LOGE(LOGTAG_MSG, "Error, cannot write Schedule row %d to flash, out of memory bounds", row_index);
 				  success_flag = false;
 			  }
 		  }
@@ -980,12 +1036,12 @@ BOOL ConfigClass::SaveScheduleTable()
 	  if (success_flag)
 	  {
 		  m_isSCTChanged = false;
-		  LOGD(LOGTAG_MSG, F("Schedule table saved."));
+		  LOGD(LOGTAG_MSG, "Schedule table saved.");
 			return true;
 	  }
 	  else
 	  {
-		  LOGE(LOGTAG_MSG, F("Unable to write 1 or more Schedule table rows to flash"));
+		  LOGE(LOGTAG_MSG, "Unable to write 1 or more Schedule table rows to flash");
 	  }
   }
 
@@ -1035,7 +1091,7 @@ BOOL ConfigClass::SaveScenarioTable()
 			  }
 			  else
 			  {
-				  LOGE(LOGTAG_MSG, F("Error, cannot write Scenario row %d to flash, out of memory bounds"), row_index);
+				  LOGE(LOGTAG_MSG, "Error, cannot write Scenario row %d to flash, out of memory bounds", row_index);
 				  success_flag = false;
 			  }
 		  }
@@ -1045,16 +1101,13 @@ BOOL ConfigClass::SaveScenarioTable()
 	  if (success_flag)
 	  {
 		  m_isSNTChanged = false;
-		  LOGD(LOGTAG_MSG, F("Scenario table saved."));
+		  LOGD(LOGTAG_MSG, "Scenario table saved.");
 			return true;
 	  }
 	  else
 	  {
-		  LOGE(LOGTAG_MSG, F("Unable to write 1 or more Scenario table rows to flash"));
+		  LOGE(LOGTAG_MSG, "Unable to write 1 or more Scenario table rows to flash");
 	  }
-
-	  m_isSNTChanged = false;
-	  LOGD(LOGTAG_MSG, F("Scenerio table saved."));
   }
 
 	return false;
@@ -1080,26 +1133,25 @@ BOOL ConfigClass::LoadRuleTable()
 					RuleArray[i].op_flag = POST;
 					RuleArray[i].run_flag = UNEXECUTED;
 					RuleArray[i].flash_flag = SAVED;		//Already know it exists in flash
+					RuleArray[i].tmr_started = 0;
 					if (!theSys.Rule_table.add(RuleArray[i])) //add non-empty row to working memory chain
 					{
-						LOGW(LOGTAG_MSG, F("Rule row %d failed to load from flash"), i);
+						LOGW(LOGTAG_MSG, "Rule row %d failed to load from flash", i);
 					}
 				}
 				//else: row is either empty or trash; do nothing
 			}
-			m_isRTChanged = true; //allow ReadNewRules() to run
-			theSys.ReadNewRules(); //acts on the Rules rules newly loaded from flash
 			m_isRTChanged = false; //since we are not calling SaveConfig(), change flag to false again
 		}
 		else
 		{
-			LOGW(LOGTAG_MSG, F("Failed to read the rule table from flash."));
+			LOGW(LOGTAG_MSG, "Failed to read the rule table from flash.");
 			return false;
 		}
 	}
 	else
 	{
-		LOGW(LOGTAG_MSG, F("Failed to load rule table, too large."));
+		LOGW(LOGTAG_MSG, "Failed to load rule table, too large.");
 		return false;
 	}
 #endif
@@ -1150,7 +1202,7 @@ BOOL ConfigClass::SaveRuleTable()
 				}
 				else
 				{
-					LOGE(LOGTAG_MSG, F("Error, cannot write Schedule row %d to flash, out of memory bounds"), row_index);
+					LOGE(LOGTAG_MSG, "Error, cannot write Schedule row %d to flash, out of memory bounds", row_index);
 					success_flag = false;
 				}
 			}
@@ -1160,12 +1212,12 @@ BOOL ConfigClass::SaveRuleTable()
 		if (success_flag)
 		{
 			m_isRTChanged = false;
-			LOGD(LOGTAG_MSG, F("Rule table saved."));
+			LOGD(LOGTAG_MSG, "Rule table saved.");
 			return true;
 		}
 		else
 		{
-			LOGE(LOGTAG_MSG, F("Unable to write 1 or more Rule table rows to flash"));
+			LOGE(LOGTAG_MSG, "Unable to write 1 or more Rule table rows to flash");
 		}
 	}
 
@@ -1179,7 +1231,7 @@ BOOL ConfigClass::LoadNodeIDList()
 	if( rc ) {
 		LOGD(LOGTAG_MSG, "NodeList loaded - %d", lstNodes.count());
 	} else {
-		LOGW(LOGTAG_MSG, F("Failed to load NodeList."));
+		LOGW(LOGTAG_MSG, "Failed to load NodeList.");
 	}
 	return rc;
 }
@@ -1191,9 +1243,9 @@ BOOL ConfigClass::SaveNodeIDList()
 
 	BOOL rc = lstNodes.saveList();
 	if( rc ) {
-		LOGI(LOGTAG_MSG, F("NodeList saved."));
+		LOGI(LOGTAG_MSG, "NodeList saved.");
 	} else {
-		LOGW(LOGTAG_MSG, F("Failed to save NodeList."));
+		LOGW(LOGTAG_MSG, "Failed to save NodeList.");
 	}
 	return rc;
 }

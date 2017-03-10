@@ -77,10 +77,26 @@ void SysteTimerCB()
 		fastTick = 0;
   	theSys.FastProcess();
 	}
+
+	// Timeout interuption of Cloud connecting
+#ifndef SYS_SERIAL_DEBUG
+	if( WiFi.listening() ) {
+		// Get Wi-Fi credential from BLE
+		// ToDo:...
+		// Reset?
+	}
+#endif
 }
+
+// Set "manual" mode
+SYSTEM_MODE(MANUAL);
+SYSTEM_THREAD(ENABLED);
 
 void setup()
 {
+	// Open Wi-Fi
+	WiFi.on();
+
   // System Initialization
   theSys.Init();
 
@@ -94,20 +110,55 @@ void setup()
   //Use TIMER6 to retain PWM capabilities on all pins
   sysTimer.begin(SysteTimerCB, RTE_DELAY_SYSTIMER, hmSec, TIMER6);
 
-  // Initialization Radio Interfaces
-  theSys.InitRadio();
+	WiFi.listen(false);
+	while(1) {
+		if( !WiFi.hasCredentials() || !theConfig.GetWiFiStatus() ) {
+			if( !theSys.connectWiFi() ) {
+				// get credential from BLE or Serial
+				SERIAL_LN("will enter listening mode");
+				WiFi.listen();
+				break;
+			}
+		}
+
+		// Connect to Wi-Fi
+		if( theSys.connectWiFi() ) {
+			if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
+				Particle.disconnect();
+			} else {
+				// Connect to the Cloud
+				if( !theSys.connectCloud() ) {
+					if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
+						// Must connect to the Cloud
+						continue;
+					}
+				}
+			}
+		} else {
+			if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
+				// Must have network
+				continue;
+			}
+		}
+		break;
+	}
+
+	// Initialization Radio Interfaces
+	theSys.InitRadio();
+
+  // Initialization network Interfaces
+  theSys.InitNetwork();
 
 	// Initiaze Cloud Variables & Functions
 	///It is fine to call this function when the cloud is disconnected - Objects will be registered next time the cloud is connected
   theSys.InitCloudObj();
 
 	// Wait the system started
-	while( millis() < 5000 ) {
-		Particle.process();
+	if( Particle.connected() == true ) {
+		while( millis() < 2000 ) {
+			Particle.process();
+		}
 	}
-
-  // Initialization network Interfaces
-  theSys.InitNetwork();
 
   // Initialize Sensors
   theSys.InitSensors();
@@ -153,6 +204,11 @@ void loop()
 
   // Self-test & alarm trigger, also insert delay between each loop
   IF_MAINLOOP_TIMER( theSys.SelfCheck(RTE_DELAY_SELFCHECK), "SelfCheck" );
+
+	// Process Could Messages
+  if( Particle.connected() == true ) {
+    IF_MAINLOOP_TIMER( Particle.process(), "ProcessCloud" );
+  }
 }
 
 #endif

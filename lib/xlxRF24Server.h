@@ -3,10 +3,11 @@
 #ifndef xlxRF24Server_h
 #define xlxRF24Server_h
 
+#include "DataQueue.h"
 #include "MyTransportNRF24.h"
 
 // RF24 Server class
-class RF24ServerClass : public MyTransportNRF24
+class RF24ServerClass : public MyTransportNRF24, public CDataQueue
 {
 public:
   RF24ServerClass(uint8_t ce=RF24_CE_PIN, uint8_t cs=RF24_CS_PIN, uint8_t paLevel=RF24_PA_LEVEL_GW);
@@ -19,6 +20,7 @@ public:
   bool ProcessSend(String &strMsg); //overloaded
   bool ProcessSend(MyMessage *pMsg = NULL);
   bool ProcessReceive();
+  bool PeekMessage();
 
   unsigned long _times;
   unsigned long _succ;

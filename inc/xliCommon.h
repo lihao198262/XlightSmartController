@@ -33,6 +33,11 @@
 #define STATUS_RST                0x06        // Reseting
 #define STATUS_ERR                0x07        // Fatal Error
 
+// Cloud Dependency
+#define CLOUD_DISABLE             0x00        // Disable Cloud
+#define CLOUD_ENABLE              0x01        // Default, Enable Cloud, use it if available
+#define CLOUD_MUST_CONNECT        0x02        // Enable Cloud and get connected anyhow
+
 // Serial Port Speed
 #define SERIALPORT_SPEED_LOW      9600
 #define SERIALPORT_SPEED_14400    14400
@@ -47,8 +52,8 @@
 #define SEN_DHT_SPEED_HIGH        2
 
 #define SEN_ALS_SPEED_LOW         10
-#define SEN_ALS_SPEED_NORMAL      2
-#define SEN_ALS_SPEED_HIGH        1
+#define SEN_ALS_SPEED_NORMAL      5
+#define SEN_ALS_SPEED_HIGH        2
 
 #define SEN_PIR_SPEED_LOW         4
 #define SEN_PIR_SPEED_NORMAL      2
@@ -66,6 +71,7 @@ enum COMMAND {CMD_SERIAL, CMD_POWER, CMD_COLOR, CMD_BRIGHTNESS, CMD_SCENARIO, CM
 #define DEVICE_SW_OFF               0       // Turn Off
 #define DEVICE_SW_ON                1       // Turn On
 #define DEVICE_SW_TOGGLE            2       // Toggle
+#define DEVICE_SW_DUMMY             3       // Detail followed
 
 // Update operator for set brightness & CCT command
 #define OPERATOR_SET                0
@@ -103,8 +109,30 @@ typedef enum
   sensorGAS,
   sensorDUST,
   sensorLEAK,
-  sensorBEAT
+  sensorBEAT,
+  sensorDHT_h = 16 // won't occupy bit position
 } sensors_t;
+
+// Sensor scope
+#define SR_SCOPE_CONTROLLER         0     // Sensor on controller
+#define SR_SCOPE_NODE               1     // Sensor on specific node
+#define SR_SCOPE_ANY                2     // Sensor on any node under the controller
+#define SR_SCOPE_GROUP              3     // Sensor on within the same node group
+
+// Sensor logic symbols
+#define SR_SYM_EQ                   0     // Equals
+#define SR_SYM_NE                   1     // Not Equal
+#define SR_SYM_GT                   2     // Greater Than
+#define SR_SYM_GE                   3     // Greater than or Equal to
+#define SR_SYM_LT                   4     // Less Than
+#define SR_SYM_LE                   5     // Less than or Equal to
+#define SR_SYM_BW                   6     // Between
+#define SR_SYM_NB                   7     // Not Between
+
+// Condition logic symbols
+#define COND_SYM_NOT                0     // NOT
+#define COND_SYM_AND                1     // AND
+#define COND_SYM_OR                 2     // OR
 
 // Device (lamp) type
 #define MAX_RING_NUM                3
@@ -146,18 +174,13 @@ typedef enum
   remotetypDummy
 } remotetype_t;
 
-// Specify system serial port, could be Serial, Serial1 or Seria2
+// Specify system serial port, could be Serial, USBSerial1, Serial1 or Seria2
 #ifndef TheSerial
 #define TheSerial       Serial
 #endif
 
-#ifndef SERIAL
 #define SERIAL          TheSerial.printf
-#endif
-
-#ifndef SERIAL_LN
 #define SERIAL_LN       TheSerial.printlnf
-#endif
 
 //--------------------------------------------------
 // Tools & Helpers

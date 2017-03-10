@@ -18,6 +18,10 @@
 */
 
 #define PACK //MSVS intellisense doesn't work when structs are packed
+
+#define CURRENT_DEVICE              (theConfig.GetMainDeviceID())
+#define IS_CURRENT_DEVICE(nid)      ((nid) == CURRENT_DEVICE || (CURRENT_DEVICE == NODEID_DUMMY && (nid) == NODEID_MAINDEVICE) )
+
 //------------------------------------------------------------------
 // Xlight Configuration Data Structures
 //------------------------------------------------------------------
@@ -61,8 +65,11 @@ typedef struct
   BOOL Reserved_bool          :5;           // Reserved for boolean flags
   UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
   UC rfPowerLevel             :2;           // RF Power Level 0..3
-  UC Reserved1                :6;           // Reserved bits
+  BOOL stWiFi                 :1;           // Wi-Fi status: On / Off
+  UC Reserved1                :5;           // Reserved bits
   US maxBaseNetworkDuration;
+  UC useCloud;                              // How to depend on the Cloud
+  UC mainDevID;                             // NodeID for main device
 } Config_t;
 
 //------------------------------------------------------------------
@@ -158,6 +165,19 @@ inline BOOL isIdentityEqual(UC *pId1, uint64_t *pData)
 //------------------------------------------------------------------
 // Xlight Rule Table Structures
 //------------------------------------------------------------------
+typedef struct
+#ifdef PACK
+	__attribute__((packed))
+#endif
+{
+	UC enabled               : 1;    // Whether the condition is enabled
+  UC sr_scope              : 3;    // Sensor scope
+  UC symbol                : 4;    // Sensor logic symbols
+  UC connector             : 2;    // Condition logic symbols
+	UC sr_id                 : 4;    // Sensor ID
+  US sr_value1;
+  US sr_value2;
+} Condition_t;
 
 typedef struct
 #ifdef PACK
@@ -172,11 +192,17 @@ typedef struct
 	UC SCT_uid               : 8;
 	UC SNT_uid               : 8;
 	UC notif_uid             : 8;
-  // ToDo: add other trigger conditions, e.g. sensor data
+  // Once rule triggered, whether repeatly check
+  UC tmr_int               : 1; // Whether enable timer
+  UC tmr_started           : 1; // Whether timer started
+  US tmr_span;             // Timer span in minutes
+  UL tmr_tic_start;        // Timer started tick
+  // Other trigger conditions, e.g. sensor data
+  Condition_t actCond[MAX_CONDITION_PER_RULE];
 } RuleRow_t;
 
 #define RT_ROW_SIZE 	sizeof(RuleRow_t)
-#define MAX_RT_ROWS		128
+#define MAX_RT_ROWS		64
 
 //------------------------------------------------------------------
 // Xlight Scenerio Table Structures
@@ -191,12 +217,13 @@ typedef struct
 	FLASH_FLAG flash_flag		: 1;
 	RUN_FLAG run_flag			  : 1;
 	UC uid			            : 8;
+  UC sw                   : 2; // Main Switch: Switch value for set power command
 	Hue_t ring[MAX_RING_NUM];
 	UC filter		            : 8;
 } ScenarioRow_t;
 
 #define SNT_ROW_SIZE	sizeof(ScenarioRow_t)
-#define MAX_SNT_ROWS	128
+#define MAX_SNT_ROWS	64
 
 // Node List Class
 class NodeListClass : public OrderdList<NodeIdRow_t>
@@ -331,6 +358,9 @@ public:
   UC GetBrightIndicator();
   BOOL SetBrightIndicator(UC level);
 
+  UC GetMainDeviceID();
+  BOOL SetMainDeviceID(UC devID);
+
   UC GetMainDeviceType();
   BOOL SetMainDeviceType(UC type);
 
@@ -342,6 +372,12 @@ public:
 
   US GetMaxBaseNetworkDur();
   BOOL SetMaxBaseNetworkDur(US dur);
+
+  UC GetUseCloud();
+  BOOL SetUseCloud(UC opt);
+
+  BOOL GetWiFiStatus();
+  BOOL SetWiFiStatus(BOOL _st);
 
   UC GetRFPowerLevel();
   BOOL SetRFPowerLevel(UC level);

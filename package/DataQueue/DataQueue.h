@@ -26,26 +26,30 @@ class CDataQueue
 {
 public:
 	CDataQueue();
-	CDataQueue(UL f_maxlen);
+	CDataQueue(US f_maxlen);
 	~CDataQueue();
 
-	UL GetMaxLength();
-	void SetMaxLength(UL f_maxlen);
-	UL Append(const UC* data, UL len);
-	UL Remove(UL f_first = 0, UC* data = NULL);
-	UL Length();
+	US GetMaxLength();
+	void SetMaxLength(US f_maxlen);
+	US Append(const UC* data, US len);
+	US Remove(US f_first = 0, UC* data = NULL);
+	US Length();
 	void ClearBuffer();
 	UC *GetBuffer();
 	void LockBuffer();
 	void UnLockBuffer();
 
 protected:
-	UC			*m_pBuffer;
+	UC		*m_pBuffer;
 	CManulSync	m_sync;
-	UL		m_length;
-	UL		m_maxlen;
+	US		m_length;
+	US		m_maxlen;
 
-	void		CreateDataBuffer(UL f_nlen);
+	void		CreateDataBuffer(US f_nlen);
+
+private:
+	US		m_pRead;
+	US		m_pWrite;
 };
 
 #endif // PCS_DATAQUEUE_INCLUDED_

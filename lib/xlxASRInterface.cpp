@@ -145,46 +145,46 @@ void ASRInterfaceClass::executeCmd(UC _cmd)
   case 0x01:    // Brightness++
     _br = theConfig.GetDevBrightness();
     _br += BTN_STEP_SHORT_BR;
-    theSys.ChangeLampBrightness(NODEID_MAINDEVICE, _br);
+    theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
     break;
 
   case 0x02:    // Brightness--
     _br = theConfig.GetDevBrightness();
     _br -= BTN_STEP_SHORT_BR;
-    theSys.ChangeLampBrightness(NODEID_MAINDEVICE, _br);
+    theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
     break;
 
   case 0x03:    // CCT++
     _cct = theConfig.GetDevCCT();
     _cct += BTN_STEP_SHORT_CCT;
-    theSys.ChangeLampCCT(NODEID_MAINDEVICE, _br);
+    theSys.ChangeLampCCT(CURRENT_DEVICE, _br);
     break;
 
   case 0x04:    // CCT--
     _cct = theConfig.GetDevCCT();
     _cct -= BTN_STEP_SHORT_CCT;
-    theSys.ChangeLampCCT(NODEID_MAINDEVICE, _br);
+    theSys.ChangeLampCCT(CURRENT_DEVICE, _br);
     break;
 
   case 0x05:    // Scenario
     _br = 25;
     _cct = 3000;
-    theSys.ChangeBR_CCT(NODEID_MAINDEVICE, _br, _cct);
+    theSys.ChangeBR_CCT(CURRENT_DEVICE, _br, _cct);
     break;
 
   case 0x06:    // Scenario
     _br = 85;
     _cct = 5000;
-    theSys.ChangeBR_CCT(_br, _cct, NODEID_MAINDEVICE);
+    theSys.ChangeBR_CCT(_br, _cct, CURRENT_DEVICE);
     break;
     */
 
   case 0x07:    // lights on
-    theSys.DevSoftSwitch(true, NODEID_MAINDEVICE);
+    theSys.DevSoftSwitch(true, CURRENT_DEVICE);
     break;
 
   case 0x08:    // lights off
-    theSys.DevSoftSwitch(false, NODEID_MAINDEVICE);
+    theSys.DevSoftSwitch(false, CURRENT_DEVICE);
     break;
   }
 }

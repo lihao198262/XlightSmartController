@@ -37,6 +37,9 @@ CloudObjClass::CloudObjClass()
   m_humidity = 0.0;
   m_brightness = 0;
   m_motion = false;
+  m_gas = 0;
+  m_dust = 0;
+  m_smoke = 0;
   m_jpRoot = &(m_jBuf.createObject());
   m_strCldCmd = "";
 }
@@ -82,6 +85,7 @@ BOOL CloudObjClass::UpdateTemperature(float value)
 {
   if( m_temperature != value ) {
     m_temperature = value;
+    OnSensorDataChanged(sensorDHT);
     if( m_jpData->success() )
     {
       (*m_jpData)["DHTt"] = value;
@@ -95,6 +99,7 @@ BOOL CloudObjClass::UpdateHumidity(float value)
 {
   if( m_humidity != value ) {
     m_humidity = value;
+    OnSensorDataChanged(sensorDHT_h);
     if( m_jpData->success() )
     {
       (*m_jpData)["DHTh"] = value;
@@ -104,27 +109,116 @@ BOOL CloudObjClass::UpdateHumidity(float value)
   return false;
 }
 
-BOOL CloudObjClass::UpdateBrightness(uint16_t value)
+BOOL CloudObjClass::UpdateBrightness(uint8_t nid, uint8_t value)
 {
   if( m_brightness != value ) {
     m_brightness = value;
+    OnSensorDataChanged(sensorALS);
+    /*
     if( m_jpData->success() )
     {
       (*m_jpData)["ALS"] = value;
     }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'ALS':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
     return true;
   }
   return false;
 }
 
-BOOL CloudObjClass::UpdateMotion(bool value)
+BOOL CloudObjClass::UpdateMotion(uint8_t nid, bool value)
 {
   if( m_motion != value ) {
     m_motion = value;
+    OnSensorDataChanged(sensorPIR);
+    /*
     if( m_jpData->success() )
     {
       (*m_jpData)["PIR"] = value;
     }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'PIR':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
+    return true;
+  }
+  return false;
+}
+
+BOOL CloudObjClass::UpdateGas(uint8_t nid, uint16_t value)
+{
+  if( m_gas != value ) {
+    m_gas = value;
+    OnSensorDataChanged(sensorGAS);
+    /*
+    if( m_jpData->success() )
+    {
+      (*m_jpData)["GAS"] = value;
+    }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'GAS':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
+    return true;
+  }
+  return false;
+}
+
+BOOL CloudObjClass::UpdateDust(uint8_t nid, uint16_t value)
+{
+  if( m_dust != value ) {
+    m_dust = value;
+    OnSensorDataChanged(sensorDUST);
+    /*
+    if( m_jpData->success() )
+    {
+      (*m_jpData)["PM25"] = value;
+    }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'PM25':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
+    return true;
+  }
+  return false;
+}
+
+BOOL CloudObjClass::UpdateSmoke(uint8_t nid, uint16_t value)
+{
+  if( m_smoke != value ) {
+    m_smoke = value;
+    OnSensorDataChanged(sensorSMOKE);
+    /*
+    if( m_jpData->success() )
+    {
+      (*m_jpData)["SMOKE"] = value;
+    }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'SMOKE':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
     return true;
   }
   return false;
@@ -135,19 +229,21 @@ void CloudObjClass::UpdateJSONData()
 {
   static UL lastTick = millis();
 
-  if( m_jpData->success() ) {
-    char buf[512];
-    m_jpData->printTo(buf, 512);
-    String strTemp = buf;
-    if( m_jsonData != strTemp || (millis() - lastTick) / 1000 >= RTE_DELAY_PUBLISH ) {
-      m_jsonData = strTemp;
-      lastTick = millis();
-      // Publish sensor data
+  // Publish sensor data
 #ifdef USE_PARTICLE_CLOUD
-      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_SensorData, PRIVATE);
-#endif
+  if( Particle.connected() ) {
+    if( m_jpData->success() ) {
+      char buf[512];
+      m_jpData->printTo(buf, 512);
+      String strTemp = buf;
+      if( m_jsonData != strTemp || (millis() - lastTick) / 1000 >= RTE_DELAY_PUBLISH ) {
+        m_jsonData = strTemp;
+        lastTick = millis();
+        Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_SensorData, PRIVATE);
+      }
     }
   }
+#endif
 }
 
 // Publish LOG message and update cloud variable
@@ -156,7 +252,9 @@ BOOL CloudObjClass::PublishLog(const char *msg)
   BOOL rc = true;
   m_lastMsg = msg;
 #ifdef USE_PARTICLE_CLOUD
-  rc = Particle.publish(CLT_NAME_LOGMSG, msg, CLT_TTL_LOGMSG, PRIVATE);
+  if( Particle.connected() ) {
+    rc = Particle.publish(CLT_NAME_LOGMSG, msg, CLT_TTL_LOGMSG, PRIVATE);
+  }
 #endif
   return rc;
 }
@@ -166,7 +264,21 @@ BOOL CloudObjClass::PublishDeviceStatus(const char *msg)
 {
   BOOL rc = true;
 #ifdef USE_PARTICLE_CLOUD
-  rc = Particle.publish(CLT_NAME_DeviceStatus, msg, CLT_TTL_DeviceStatus, PRIVATE);
+  if( Particle.connected() ) {
+    rc = Particle.publish(CLT_NAME_DeviceStatus, msg, CLT_TTL_DeviceStatus, PRIVATE);
+  }
+#endif
+  return rc;
+}
+
+// Publish Alarm
+BOOL CloudObjClass::PublishAlarm(const char *msg)
+{
+  BOOL rc = true;
+#ifdef USE_PARTICLE_CLOUD
+  if( Particle.connected() ) {
+    rc = Particle.publish(CLT_NAME_Alarm, msg, CLT_TTL_Alarm, PRIVATE);
+  }
 #endif
   return rc;
 }

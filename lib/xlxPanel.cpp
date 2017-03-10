@@ -148,7 +148,7 @@ bool xlPanelClass::ProcessEncoder()
         break;
       case BUTTON_CLICKED:
         LOGD(LOGTAG_ACTION, "Button Clicked");
-        theSys.ToggleLampOnOff(NODEID_MAINDEVICE);
+        theSys.ToggleLampOnOff(CURRENT_DEVICE);
         // Clear CCT flag, but don't need to change HC595, cuz the toggle function will do it
         //SetCCTFlag(false);
         m_bCCTFlag = false;
@@ -177,7 +177,7 @@ void xlPanelClass::SetDimmerValue(int16_t _value)
 		m_nDimmerValue = _value;
     SetHC595();
     // Send Light Percentage message
-    theSys.ChangeLampBrightness(NODEID_MAINDEVICE, _value);
+    theSys.ChangeLampBrightness(CURRENT_DEVICE, _value);
 		LOGD(LOGTAG_EVENT, "Dimmer-BR changed to %d", _value);
 	}
 }
@@ -205,7 +205,7 @@ void xlPanelClass::SetCCTValue(int16_t _value)
     SetHC595();
     // Send CCT message
     US cctValue = map(_value, 0, 100, CT_MIN_VALUE, CT_MAX_VALUE);
-    theSys.ChangeLampCCT(NODEID_MAINDEVICE, cctValue);
+    theSys.ChangeLampCCT(CURRENT_DEVICE, cctValue);
 		LOGD(LOGTAG_EVENT, "Dimmer-CCT changed to %d", cctValue);
 	}
 }

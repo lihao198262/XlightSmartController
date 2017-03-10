@@ -53,6 +53,7 @@ UC *msgData = (UC *)&(msg.msg);
 
 RF24ServerClass::RF24ServerClass(uint8_t ce, uint8_t cs, uint8_t paLevel)
 	:	MyTransportNRF24(ce, cs, paLevel)
+	, CDataQueue(MAX_MESSAGE_LENGTH * MQ_MAX_RF_MSG)
 {
 	_times = 0;
 	_succ = 0;
@@ -63,7 +64,7 @@ bool RF24ServerClass::ServerBegin()
 {
   // Initialize RF module
 	if( !init() ) {
-    LOGC(LOGTAG_MSG, F("RF24 module is not valid!"));
+    LOGC(LOGTAG_MSG, "RF24 module is not valid!");
 		return false;
 	}
 
@@ -121,20 +122,20 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 	uint8_t payload[MAX_PAYLOAD];
 
 	int nPos = strMsg.indexOf(':');
+	int nPos2;
 	uint8_t lv_nNodeID;
 	uint8_t lv_nMsgID;
-	String lv_sPayload;
+	String lv_sPayload = "";
 	if (nPos > 0) {
 		// Extract NodeID & MessageID
 		lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
 		lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1).toInt());
-		int nPos2 = strMsg.indexOf(':', nPos + 1);
+		nPos2 = strMsg.indexOf(':', nPos + 1);
 		if (nPos2 > 0) {
 			lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
 			lv_sPayload = strMsg.substring(nPos2 + 1);
 		} else {
 			lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1).toInt());
-			lv_sPayload = "";
 		}
 	}
 	else {
@@ -189,6 +190,9 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 	case 4:   // Temperature set to 23.5, req no ack
 		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_TEMP, false);
 		fValue = 23.5;
+		if( lv_sPayload.length() > 0 ) {
+			fValue = lv_sPayload.toFloat();
+		}
 		msg.set(fValue, 2);
 		bMsgReady = true;
 		SERIAL("Now sending set temperature message...");
@@ -197,6 +201,9 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 	case 5:   // Humidity set to 45, req no ack
 		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_HUM, false);
 		iValue = 45;
+		if( lv_sPayload.length() > 0 ) {
+			iValue = lv_sPayload.toInt();
+		}
 		msg.set(iValue);
 		bMsgReady = true;
 		SERIAL("Now sending set humidity message...");
@@ -210,7 +217,7 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 
 	case 7:   // Set main lamp(ID:1) power(V_STATUS:2) on/off, ack
 		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_STATUS, true);
-		bytValue = (lv_sPayload == "1" ? 1 : 0);
+		bytValue = constrain(lv_sPayload.toInt(), DEVICE_SW_OFF, DEVICE_SW_TOGGLE);
 		msg.set(bytValue);
 		bMsgReady = true;
 		SERIAL("Now sending set V_STATUS %s message...", (bytValue ? "on" : "off"));
@@ -224,7 +231,7 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 
 	case 9:   // Set main lamp(ID:1) dimmer (V_PERCENTAGE:3), ack
 		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_PERCENTAGE, true);
-		bytValue = constrain(atoi(lv_sPayload), 0, 100);
+		bytValue = constrain(lv_sPayload.toInt(), 0, 100);
 		msg.set((uint8_t)OPERATOR_SET, bytValue);
 		bMsgReady = true;
 		SERIAL("Now sending set V_PERCENTAGE:%d message...", bytValue);
@@ -238,7 +245,7 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 
 	case 11:  // Set main lamp(ID:1) color temperature (V_LEVEL), ack
 		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_LEVEL, true);
-		iValue = constrain(atoi(lv_sPayload), CT_MIN_VALUE, CT_MAX_VALUE);
+		iValue = constrain(lv_sPayload.toInt(), CT_MIN_VALUE, CT_MAX_VALUE);
 		msg.set((uint8_t)OPERATOR_SET, (unsigned int)iValue);
 		bMsgReady = true;
 		SERIAL("Now sending set CCT V_LEVEL %d message...", iValue);
@@ -252,24 +259,61 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 		break;
 
 	case 13:  // Set main lamp(ID:1) status in one, ack
-			msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_RGBW, true);
-			bytValue = 65;
-			iValue = 3000;
-			nPos = lv_sPayload.indexOf(':');
-			if (nPos > 0) {
-				// Extract brightness & cct
-				bytValue = (uint8_t)(lv_sPayload.substring(0, nPos).toInt());
-				iValue = lv_sPayload.substring(nPos + 1).toInt();
+		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_RGBW, true);
+		payload[0] = RING_ID_ALL;
+		payload[1] = 1;
+		payload[2] = 65;
+		nPos = lv_sPayload.indexOf(':');
+		if (nPos > 0) {
+			// Extract brightness, cct or WRGB
+			bytValue = (uint8_t)(lv_sPayload.substring(0, nPos).toInt());
+			payload[2] = bytValue;
+			iValue = lv_sPayload.substring(nPos + 1).toInt();
+			if( iValue < 256 ) {
+				// WRGB
+				payload[3] = iValue;	// W
+				payload[4] = 0;	// R
+				payload[5] = 0;	// G
+				payload[6] = 0;	// B
+				for( int cindex = 3; cindex < 7; cindex++ ) {
+					lv_sPayload = lv_sPayload.substring(nPos + 1);
+					nPos = lv_sPayload.indexOf(':');
+					if (nPos <= 0) {
+						bytValue = (uint8_t)(lv_sPayload.toInt());
+						payload[cindex] = bytValue;
+						break;
+					}
+					bytValue = (uint8_t)(lv_sPayload.substring(0, nPos).toInt());
+					payload[cindex] = bytValue;
+				}
+				msg.set((void*)payload, 7);
+				SERIAL("Now sending set BR=%d WRGB=(%d,%d,%d,%d)...",
+						payload[2], payload[3], payload[4], payload[5], payload[6]);
+			} else {
+				// CCT
 				iValue = constrain(iValue, CT_MIN_VALUE, CT_MAX_VALUE);
+				payload[3] = iValue % 256;
+			  payload[4] = iValue / 256;
+				msg.set((void*)payload, 5);
+				SERIAL("Now sending set BR=%d CCT=%d...", bytValue, iValue);
 			}
-			payload[0] = 1;
-		  payload[1] = bytValue;
-		  payload[2] = iValue % 256;
-		  payload[3] = iValue / 256;
-			msg.set((void*)payload, 4);
-			bMsgReady = true;
-			SERIAL("Now sending set CCT V_RGBW (br=%d, cct=%d message...", bytValue, iValue);
-			break;
+		} else {
+			iValue = 3000;
+			payload[3] = iValue % 256;
+		  payload[4] = iValue / 256;
+			msg.set((void*)payload, 5);
+			SERIAL("Now sending set BR=%d CCT=%d...", bytValue, iValue);
+		}
+		bMsgReady = true;
+		break;
+
+	case 14:	// Reserved for query command
+		break;
+
+	case 15:	// Set Device Scenerio
+		bytValue = (UC)(lv_sPayload.toInt());
+		theSys.ChangeLampScenario(lv_nNodeID, bytValue);
+		break;
 	}
 
 	if (bMsgReady) {
@@ -304,174 +348,203 @@ bool RF24ServerClass::ProcessSend(MyMessage *pMsg)
 	return false;
 }
 
-bool RF24ServerClass::ProcessReceive()
+bool RF24ServerClass::PeekMessage()
 {
 	if( !isValid() ) return false;
 
+	UC to = 0;
+  UC pipe;
+	UC len;
+	MyMessage lv_msg;
+	UC *lv_pData = (UC *)&(lv_msg.msg);
+
+	while (available(&to, &pipe)) {
+		len = receive(lv_pData);
+
+		// rough check
+	  if( len < HEADER_SIZE )
+	  {
+	    LOGW(LOGTAG_MSG, "got corrupt dynamic payload!");
+	    return false;
+	  } else if( len > MAX_MESSAGE_LENGTH )
+	  {
+	    LOGW(LOGTAG_MSG, "message length exceeded: %d", len);
+	    return false;
+	  }
+
+	  _received++;
+	  LOGD(LOGTAG_MSG, "Received from pipe %d msg-len=%d, from:%d to:%d dest:%d cmd:%d type:%d sensor:%d payl-len:%d",
+	        pipe, len, lv_msg.getSender(), to, lv_msg.getDestination(), lv_msg.getCommand(),
+	        lv_msg.getType(), lv_msg.getSensor(), lv_msg.getLength());
+		if( !Append(lv_pData, len) ) return false;
+	}
+	return true;
+}
+
+bool RF24ServerClass::ProcessReceive()
+{
 	bool msgReady = false;
   bool sentOK = false;
-  uint8_t to = 0;
-  uint8_t pipe;
-	UC replyTo;
-	UC msgType;
-	UC transTo;
-  if (!available(&to, &pipe))
-    return false;
-
-  uint8_t len = receive(msgData);
-	uint8_t payl_len = msg.getLength();
-  if( len < HEADER_SIZE )
-  {
-    LOGW(LOGTAG_MSG, "got corrupt dynamic payload!");
-    return false;
-  } else if( len > MAX_MESSAGE_LENGTH )
-  {
-    LOGW(LOGTAG_MSG, "message length exceeded: %d", len);
-    return false;
-  }
-
-  char strDisplay[SENSORDATA_JSON_SIZE];
-  _received++;
-	msgType = msg.getType();
-	replyTo = msg.getSender();
-  LOGD(LOGTAG_MSG, "Received from pipe %d msg-len=%d, from:%d to:%d dest:%d cmd:%d type:%d sensor:%d payl-len:%d",
-        pipe, len, replyTo, to, msg.getDestination(), msg.getCommand(),
-        msgType, msg.getSensor(), payl_len);
-	/*
-  memset(strDisplay, 0x00, sizeof(strDisplay));
-  msg.getJsonString(strDisplay);
-  SERIAL_LN("  JSON: %s, len: %d", strDisplay, strlen(strDisplay));
-  memset(strDisplay, 0x00, sizeof(strDisplay));
-  SERIAL_LN("  Serial: %s, len: %d", msg.getSerialString(strDisplay), strlen(strDisplay));
-	*/
-
-	bool _bIsAck = msg.isAck();
-	bool _needAck = msg.isReqAck();
-	uint8_t *payload = (uint8_t *)msg.getCustom();
+	UC pipe, len, payl_len;
+	UC replyTo, _sensor, msgType, transTo;
+	bool _bIsAck, _needAck;
+	UC *payload;
 	UC _bValue;
 	US _iValue;
+	char strDisplay[SENSORDATA_JSON_SIZE];
 
-  switch( msg.getCommand() )
-  {
-    case C_INTERNAL:
-      if( msgType == I_ID_REQUEST && (replyTo == AUTO || replyTo == BASESERVICE_ADDRESS) ) {
-        // On ID Request message:
-        /// Get new ID
-				char cNodeType = (char)msg.getSensor();
-				uint64_t nIdentity = msg.getUInt64();
-        UC newID = theConfig.lstNodes.requestNodeID(cNodeType, nIdentity);
+  while (Length() > 0) {
 
-        /// Send response message
-        msg.build(getAddress(), replyTo, newID, C_INTERNAL, I_ID_RESPONSE, false, true);
-				if( newID > 0 ) {
-	        msg.set(getMyNetworkID());
-	        LOGN(LOGTAG_EVENT, "Allocated NodeID:%d type:%c to %s", newID, cNodeType, PrintUint64(strDisplay, nIdentity));
-				} else {
-					LOGW(LOGTAG_MSG, "Failed to allocate NodeID type:%c to %s", cNodeType, PrintUint64(strDisplay, nIdentity));
-				}
-				msgReady = true;
-      }
-      break;
+	  len = Remove(MAX_MESSAGE_LENGTH, msgData);
+		pipe = PRIVATE_NET_PIPE;
+		payl_len = msg.getLength();
+		_sensor = msg.getSensor();
+		msgType = msg.getType();
+		replyTo = msg.getSender();
+		_bIsAck = msg.isAck();
+		_needAck = msg.isReqAck();
+		payload = (uint8_t *)msg.getCustom();
 
-		case C_PRESENTATION:
-			if( msgType == S_LIGHT || msgType == S_DIMMER ) {
-				US token;
-				if( _needAck ) {
-					// Presentation message: appear of Smart Lamp
-					// Verify credential, return token if true, and change device status
-					UC lv_nNodeID = msg.getSender();
-					UC lampType = msg.getSensor();
+		/*
+	  memset(strDisplay, 0x00, sizeof(strDisplay));
+	  msg.getJsonString(strDisplay);
+	  SERIAL_LN("  JSON: %s, len: %d", strDisplay, strlen(strDisplay));
+	  memset(strDisplay, 0x00, sizeof(strDisplay));
+	  SERIAL_LN("  Serial: %s, len: %d", msg.getSerialString(strDisplay), strlen(strDisplay));
+		*/
+		LOGD(LOGTAG_MSG, "Will process cmd:%d from:%d type:%d sensor:%d",
+					msg.getCommand(), replyTo, msgType, _sensor);
+
+	  switch( msg.getCommand() )
+	  {
+	    case C_INTERNAL:
+	      if( msgType == I_ID_REQUEST && (replyTo == AUTO || replyTo == BASESERVICE_ADDRESS) ) {
+	        // On ID Request message:
+	        /// Get new ID
+					char cNodeType = (char)_sensor;
 					uint64_t nIdentity = msg.getUInt64();
-					token = theSys.VerifyDevicePresence(lv_nNodeID, lampType, nIdentity);
-					if( token ) {
-						// return token
-						// Notes: lampType & S_LIGHT are not necessary
-		        msg.build(getAddress(), replyTo, lampType, C_PRESENTATION, msgType, false, true);
-						msg.set((unsigned int)token);
-						msgReady = true;
-						// ToDo: send status req to this lamp
+	        UC newID = theConfig.lstNodes.requestNodeID(cNodeType, nIdentity);
+					pipe = CURRENT_NODE_PIPE;  // Use Base Network
+
+	        /// Send response message
+	        msg.build(getAddress(), replyTo, newID, C_INTERNAL, I_ID_RESPONSE, false, true);
+					if( newID > 0 ) {
+		        msg.set(getMyNetworkID());
+		        LOGN(LOGTAG_EVENT, "Allocated NodeID:%d type:%c to %s", newID, cNodeType, PrintUint64(strDisplay, nIdentity));
 					} else {
-						LOGW(LOGTAG_MSG, "Unqualitied device connect attemp received");
+						LOGW(LOGTAG_MSG, "Failed to allocate NodeID type:%c to %s", cNodeType, PrintUint64(strDisplay, nIdentity));
+					}
+					msgReady = true;
+	      }
+	      break;
+
+			case C_PRESENTATION:
+				if( _sensor == S_LIGHT || _sensor == S_DIMMER ) {
+					US token;
+					if( _needAck ) {
+						// Presentation message: appear of Smart Lamp
+						// Verify credential, return token if true, and change device status
+						UC lv_nNodeID = msg.getSender();
+						uint64_t nIdentity = msg.getUInt64();
+						token = theSys.VerifyDevicePresence(lv_nNodeID, msgType, nIdentity);
+						if( token ) {
+							// return token
+							// Notes: lampType & S_LIGHT are not necessary
+			        msg.build(getAddress(), replyTo, _sensor, C_PRESENTATION, msgType, false, true);
+							msg.set((unsigned int)token);
+							msgReady = true;
+							// ToDo: send status req to this lamp
+						} else {
+							LOGW(LOGTAG_MSG, "Unqualitied device connect attemp received");
+						}
+					}
+				} else if( _sensor == S_IR ) {
+					if( msgType == V_STATUS) { // PIR
+						theSys.UpdateMotion(replyTo, msg.getByte()!=DEVICE_SW_OFF);
+					}
+				} else if( _sensor == S_LIGHT_LEVEL ) {
+					if( msgType == V_LIGHT_LEVEL) { // ALS
+						theSys.UpdateBrightness(replyTo, msg.getByte());
 					}
 				}
-			}
-			break;
+				break;
 
-		case C_REQ:
-			// ToDo: verify token
-			if( msgType == V_STATUS || msgType == V_PERCENTAGE || msgType == V_LEVEL
-				  || msgType == V_RGBW || msgType == V_DISTANCE ) {
-				transTo = (msg.getDestination() == getAddress() ? msg.getSensor() : msg.getDestination());
-				BOOL bDataChanged = false;
-				if( _bIsAck ) {
-					//SERIAL_LN("REQ ack:%d to: %d 0x%x-0x%x-0x%x-0x%x-0x%x-0x%x-0x%x", msgType, transTo, payload[0],payload[1], payload[2], payload[3], payload[4],payload[5],payload[6]);
-					if( msgType == V_STATUS ||  msgType == V_PERCENTAGE ) {
-						bDataChanged |= theSys.ConfirmLampBrightness(replyTo, payload[0], payload[1]);
-					} else if( msgType == V_LEVEL ) {
-						bDataChanged |= theSys.ConfirmLampCCT(replyTo, (US)msg.getUInt());
-					} else if( msgType == V_RGBW ) {
-						if( payload[0] ) {	// Succeed or not
-							static bool bFirstRGBW = true;		// Make sure the first message will be sent anyway
+			case C_REQ:
+				// ToDo: verify token
+				if( msgType == V_STATUS || msgType == V_PERCENTAGE || msgType == V_LEVEL
+					  || msgType == V_RGBW || msgType == V_DISTANCE ) {
+					transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
+					BOOL bDataChanged = false;
+					if( _bIsAck ) {
+						//SERIAL_LN("REQ ack:%d to: %d 0x%x-0x%x-0x%x-0x%x-0x%x-0x%x-0x%x", msgType, transTo, payload[0],payload[1], payload[2], payload[3], payload[4],payload[5],payload[6]);
+						if( msgType == V_STATUS ||  msgType == V_PERCENTAGE ) {
+							bDataChanged |= theSys.ConfirmLampBrightness(replyTo, payload[0], payload[1]);
+						} else if( msgType == V_LEVEL ) {
+							bDataChanged |= theSys.ConfirmLampCCT(replyTo, (US)msg.getUInt());
+						} else if( msgType == V_RGBW ) {
+							if( payload[0] ) {	// Succeed or not
+								static bool bFirstRGBW = true;		// Make sure the first message will be sent anyway
+								UC _devType = payload[1];	// payload[2] is present status
+								UC _ringID = payload[3];
+								if( IS_SUNNY(_devType) ) {
+									// Sunny
+									US _CCTValue = payload[7] * 256 + payload[6];
+									bDataChanged |= theSys.ConfirmLampCCT(replyTo, _CCTValue, _ringID);
+									bDataChanged |= theSys.ConfirmLampBrightness(replyTo, payload[4], payload[5], _ringID);
+									bDataChanged |= bFirstRGBW;
+									bFirstRGBW = false;
+								} else if( IS_RAINBOW(_devType) || IS_MIRAGE(_devType) ) {
+									// Rainbow or Mirage, set RBGW
+									bDataChanged |= theSys.ConfirmLampHue(replyTo, payload[6], payload[7], payload[8], payload[9], _ringID);
+									bDataChanged |= theSys.ConfirmLampBrightness(replyTo, payload[4], payload[5], _ringID);
+									bDataChanged |= bFirstRGBW;
+									bFirstRGBW = false;
+								}
+							}
+						} else if( msgType == V_DISTANCE && payload[0] ) {
 							UC _devType = payload[1];	// payload[2] is present status
-							UC _ringID = payload[3];
-							if( IS_SUNNY(_devType) ) {
-								// Sunny
-								US _CCTValue = payload[7] * 256 + payload[6];
-								bDataChanged |= theSys.ConfirmLampCCT(replyTo, _CCTValue, _ringID);
-								bDataChanged |= theSys.ConfirmLampBrightness(replyTo, payload[4], payload[5], _ringID);
-								bDataChanged |= bFirstRGBW;
-								bFirstRGBW = false;
-							} else if( IS_RAINBOW(_devType) || IS_MIRAGE(_devType) ) {
-								// Rainbow or Mirage, set RBGW
-								bDataChanged |= theSys.ConfirmLampHue(replyTo, payload[6], payload[7], payload[8], payload[9], _ringID);
-								bDataChanged |= theSys.ConfirmLampBrightness(replyTo, payload[4], payload[5], _ringID);
-								bDataChanged |= bFirstRGBW;
-								bFirstRGBW = false;
+							if( IS_MIRAGE(_devType) ) {
+								bDataChanged |= theSys.ConfirmLampTop(replyTo, payload, payl_len);
 							}
 						}
-					} else if( msgType == V_DISTANCE && payload[0] ) {
-						UC _devType = payload[1];	// payload[2] is present status
-						if( IS_MIRAGE(_devType) ) {
-							bDataChanged |= theSys.ConfirmLampTop(replyTo, payload, payl_len);
+
+						// If data changed, new status must broadcast to all end points
+						if( bDataChanged ) {
+							transTo = BROADCAST_ADDRESS;
 						}
 					}
-
-					// If data changed, new status must broadcast to all end points
-					if( bDataChanged ) {
-						transTo = BROADCAST_ADDRESS;
+					// ToDo: if lamp is not present, return error
+					if( transTo > 0 ) {
+						// Transfer message
+						msg.build(getAddress(), transTo, replyTo, C_REQ, msgType, _needAck, _bIsAck, true);
+						// Keep payload unchanged
+						msgReady = true;
 					}
 				}
+				break;
+
+			case C_SET:
+				// ToDo: verify token
 				// ToDo: if lamp is not present, return error
+				transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
 				if( transTo > 0 ) {
 					// Transfer message
-					msg.build(getAddress(), transTo, replyTo, C_REQ, msgType, _needAck, _bIsAck, true);
+					msg.build(getAddress(), transTo, replyTo, C_SET, msgType, _needAck, _bIsAck, true);
 					// Keep payload unchanged
 					msgReady = true;
 				}
-			}
-			break;
+				break;
 
-		case C_SET:
-			// ToDo: verify token
-			// ToDo: if lamp is not present, return error
-			transTo = (msg.getDestination() == getAddress() ? msg.getSensor() : msg.getDestination());
-			if( transTo > 0 ) {
-				// Transfer message
-				msg.build(getAddress(), transTo, replyTo, C_SET, msgType, _needAck, _bIsAck, true);
-				// Keep payload unchanged
-				msgReady = true;
-			}
-			break;
+	    default:
+	      break;
+	  }
 
-    default:
-      break;
-  }
-
-	// Send reply message
-	if( msgReady ) {
-		_times++;
-		sentOK = send(msg.getDestination(), msg, pipe);
-		if( sentOK ) _succ++;
+		// Send reply message
+		if( msgReady ) {
+			_times++;
+			sentOK = send(msg.getDestination(), msg, pipe);
+			if( sentOK ) _succ++;
+		}
 	}
 
   return true;
