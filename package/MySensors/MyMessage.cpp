@@ -383,7 +383,7 @@ char* MyMessage::getSerialString(char *buffer) const {
 
 		sprintf(buffer, "%d;%d;%d;%d;%d;%s\n",
 		  msg.header.destination, msg.header.sensor, miGetCommand(),
-			miGetRequestAck(), msg.header.type, getString(payl));
+			(miGetAck() ? 2 : miGetRequestAck()), msg.header.type, getString(payl));
 		return buffer;
 	}
 
@@ -401,7 +401,7 @@ char* MyMessage::getJsonString(char *buffer) const {
 	    (*jroot)["nd"] = msg.header.destination;
 			(*jroot)["sen"] = msg.header.sensor;
 			(*jroot)["cmd"] = miGetCommand();
-			(*jroot)["ack"] = miGetRequestAck();
+			(*jroot)["ack"] = (miGetAck() ? 2 : miGetRequestAck());
 			(*jroot)["typ"] = msg.header.type;
 			(*jroot)["payl"] = getString(payl);
 

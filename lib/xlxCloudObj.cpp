@@ -24,6 +24,7 @@
 **/
 
 #include "xlxCloudObj.h"
+#include "xlxLogger.h"
 
 //------------------------------------------------------------------
 // Xlight Cloud Object Class
@@ -37,9 +38,11 @@ CloudObjClass::CloudObjClass()
   m_humidity = 0.0;
   m_brightness = 0;
   m_motion = false;
+  m_sound = false;
   m_gas = 0;
   m_dust = 0;
   m_smoke = 0;
+  m_noise = 0;
   m_jpRoot = &(m_jBuf.createObject());
   m_strCldCmd = "";
 }
@@ -77,6 +80,28 @@ String CloudObjClass::GetSysID()
 String CloudObjClass::GetSysVersion()
 {
 	return m_SysVersion;
+}
+
+int CloudObjClass::CldJSONCommand(String jsonCmd)
+{
+  if( m_cmdList.size() > MQ_MAX_CLOUD_MSG ) {
+    LOGW(LOGTAG_MSG, "JSON commands exceeded queue size");
+    return 0;
+  }
+
+  m_cmdList.add(jsonCmd);
+  return 1;
+}
+
+int CloudObjClass::CldJSONConfig(String jsonData)
+{
+  if( m_configList.size() > MQ_MAX_CLOUD_MSG ) {
+    LOGW(LOGTAG_MSG, "JSON config exceeded queue size");
+    return 0;
+  }
+
+  m_configList.add(jsonData);
+  return 1;
 }
 
 // Here we can either send/publish data on individual data entry basis,
@@ -224,6 +249,52 @@ BOOL CloudObjClass::UpdateSmoke(uint8_t nid, uint16_t value)
   return false;
 }
 
+BOOL CloudObjClass::UpdateSound(uint8_t nid, bool value)
+{
+  if( m_sound != value ) {
+    m_sound = value;
+    OnSensorDataChanged(sensorMIC_b);
+    /*
+    if( m_jpData->success() )
+    {
+      (*m_jpData)["PIR"] = value;
+    }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'MIC':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
+    return true;
+  }
+  return false;
+}
+
+BOOL CloudObjClass::UpdateNoise(uint8_t nid, uint16_t value)
+{
+  if( m_noise != value ) {
+    m_noise = value;
+    OnSensorDataChanged(sensorMIC);
+    /*
+    if( m_jpData->success() )
+    {
+      (*m_jpData)["MIC"] = value;
+    }
+    */
+#ifdef USE_PARTICLE_CLOUD
+    // Publis right away
+    if( Particle.connected() ) {
+      String strTemp = String::format("{'nd':%d,'NOISE':%d}", nid, value);
+      Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+    }
+#endif
+    return true;
+  }
+  return false;
+}
+
 // Compose JSON Data String
 void CloudObjClass::UpdateJSONData()
 {
@@ -236,10 +307,12 @@ void CloudObjClass::UpdateJSONData()
       char buf[512];
       m_jpData->printTo(buf, 512);
       String strTemp = buf;
-      if( m_jsonData != strTemp || (millis() - lastTick) / 1000 >= RTE_DELAY_PUBLISH ) {
-        m_jsonData = strTemp;
-        lastTick = millis();
-        Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_SensorData, PRIVATE);
+      if( strTemp.length() > 5 ) {
+        if( m_jsonData != strTemp || (millis() - lastTick) / 1000 >= RTE_DELAY_PUBLISH ) {
+          m_jsonData = strTemp;
+          lastTick = millis();
+          Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_SensorData, PRIVATE);
+        }
       }
     }
   }
@@ -266,6 +339,28 @@ BOOL CloudObjClass::PublishDeviceStatus(const char *msg)
 #ifdef USE_PARTICLE_CLOUD
   if( Particle.connected() ) {
     rc = Particle.publish(CLT_NAME_DeviceStatus, msg, CLT_TTL_DeviceStatus, PRIVATE);
+  }
+#endif
+  return rc;
+}
+
+void CloudObjClass::GotNodeConfigAck(const UC _nodeID, const UC *data)
+{
+	String strTemp;
+
+  strTemp = String::format("{'node_id':%d,'ver':%d,'type':%d,'senMap':%d,'funcMap':%d,'data':[%d,%d,%d,%d,%d,%d]}",
+			 _nodeID, data[0], data[1],	data[2] + data[3]*256, data[4] + data[5]*256,
+       data[6], data[7], data[8], data[9], data[10], data[11]);
+	PublishDeviceConfig(strTemp.c_str());
+}
+
+// Publish Device Config
+BOOL CloudObjClass::PublishDeviceConfig(const char *msg)
+{
+  BOOL rc = true;
+#ifdef USE_PARTICLE_CLOUD
+  if( Particle.connected() ) {
+    rc = Particle.publish(CLT_NAME_DeviceConfig, msg, CLT_TTL_DeviceConfig, PRIVATE);
   }
 #endif
   return rc;

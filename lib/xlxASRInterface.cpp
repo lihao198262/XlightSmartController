@@ -31,12 +31,18 @@
 #include "xlxASRInterface.h"
 #include "xlSmartController.h"
 #include "xlxConfig.h"
+#include "xlxLogger.h"
 #include "ParticleSoftSerial.h"
 #include "xliPinMap.h"
 
 #define ASR_TXCMD_PREFIX          0xbb
 #define ASR_RXCMD_PREFIX          0xaa
 #define ASR_CMD_LEN               3
+
+#define BTN_STEP_SHORT_BR         10
+#define BTN_STEP_SHORT_CCT        300
+#define BTN_STEP_LONG_BR          25
+#define BTN_STEP_LONG_CCT         800
 
 //------------------------------------------------------------------
 // the one and only instance of ASRInterfaceClass
@@ -78,10 +84,17 @@ bool ASRInterfaceClass::processCommand()
   bool rc = false;
   int incomingByte;
 
+  // Send command
+  if( m_sndCmd > 0 ) {
+    sendCommand(m_sndCmd, true);
+    SERIAL("asr cmd %d rc=", m_sndCmd);
+    m_sndCmd = 0;
+  }
+
   while( ASRPort.available() > 0 ) {
     incomingByte = ASRPort.read();
     if( incomingByte < 0 ) break;
-    SERIAL("0x%x", incomingByte);
+    SERIAL("0x%02x ", incomingByte);
     if( (UC)incomingByte == ASR_RXCMD_PREFIX ) {
       bWaitCmd = true;
       rc = false;   // start to receive new command
@@ -104,23 +117,29 @@ bool ASRInterfaceClass::processCommand()
   // Delay Execution
   if( m_delayCmdTimer > 0 ) {
     if( --m_delayCmdTimer == 0 ) {
-      ASRPort.end();
+      //ASRPort.end();
       executeCmd(m_revCmd);
-      ASRPort.begin(m_speed);
+      //ASRPort.begin(m_speed, PROTOCOL);
     }
   }
 
   return rc;
 }
 
-bool ASRInterfaceClass::sendCommand(UC _cmd)
+bool ASRInterfaceClass::sendCommand(UC _cmd, bool now)
 {
-  UC buf[ASR_CMD_LEN];
-  buf[0] = ASR_TXCMD_PREFIX;
-  buf[1] = _cmd;
-  buf[2] = ~_cmd;
-  if( ASRPort.write(buf, ASR_CMD_LEN) < ASR_CMD_LEN ) return false;
-  m_sndCmd = _cmd;
+  if( now ) {
+    UC buf[ASR_CMD_LEN];
+    buf[0] = ASR_TXCMD_PREFIX;
+    buf[1] = _cmd;
+    buf[2] = ~_cmd;
+    //UC _len = ASRPort.write(buf, ASR_CMD_LEN);
+    //if( _len < ASR_CMD_LEN ) return false;
+    //SERIAL_LN("len: %d - 0x%02x 0x%02x 0x%02x", _len, buf[0], buf[1], buf[2]);
+    if( ASRPort.write(buf, ASR_CMD_LEN) < ASR_CMD_LEN ) return false;
+  } else {
+    m_sndCmd = _cmd;
+  }
   return true;
 }
 
@@ -136,55 +155,46 @@ UC ASRInterfaceClass::getLastSentCmd()
 
 void ASRInterfaceClass::executeCmd(UC _cmd)
 {
-  SERIAL_LN("\n\rexecute ASR cmd: 0x%x", _cmd);
-  UC _br;
+  LOGD(LOGTAG_MSG, "execute ASR cmd: 0x%x", _cmd);
+  UC _snt, _br;
   US _cct;
 
-  switch( _cmd ) {
-  /*
-  case 0x01:    // Brightness++
-    _br = theConfig.GetDevBrightness();
-    _br += BTN_STEP_SHORT_BR;
-    theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
-    break;
+  _snt = theConfig.GetASR_SNT(_cmd);
+  if( _snt > 0 && _snt < 255 ) {
+    theSys.ChangeLampScenario(CURRENT_DEVICE, _snt);
+  } else {
+    switch( _cmd ) {
+    case 0x01:    // lights on
+      theSys.DevSoftSwitch(true, CURRENT_DEVICE);
+      break;
 
-  case 0x02:    // Brightness--
-    _br = theConfig.GetDevBrightness();
-    _br -= BTN_STEP_SHORT_BR;
-    theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
-    break;
+    case 0x02:    // lights off
+      theSys.DevSoftSwitch(false, CURRENT_DEVICE);
+      break;
 
-  case 0x03:    // CCT++
-    _cct = theConfig.GetDevCCT();
-    _cct += BTN_STEP_SHORT_CCT;
-    theSys.ChangeLampCCT(CURRENT_DEVICE, _br);
-    break;
+    case 0x03:    // Brightness++
+      _br = theSys.GetDevBrightness(CURRENT_DEVICE);
+      _br += BTN_STEP_SHORT_BR;
+      theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
+      break;
 
-  case 0x04:    // CCT--
-    _cct = theConfig.GetDevCCT();
-    _cct -= BTN_STEP_SHORT_CCT;
-    theSys.ChangeLampCCT(CURRENT_DEVICE, _br);
-    break;
+    case 0x04:    // Brightness--
+      _br = theSys.GetDevBrightness(CURRENT_DEVICE);
+      _br -= BTN_STEP_SHORT_BR;
+      theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
+      break;
 
-  case 0x05:    // Scenario
-    _br = 25;
-    _cct = 3000;
-    theSys.ChangeBR_CCT(CURRENT_DEVICE, _br, _cct);
-    break;
+    case 0x05:    // CCT++
+      _cct = theSys.GetDevCCT(CURRENT_DEVICE);
+      _cct += BTN_STEP_SHORT_CCT;
+      theSys.ChangeLampCCT(CURRENT_DEVICE, _br);
+      break;
 
-  case 0x06:    // Scenario
-    _br = 85;
-    _cct = 5000;
-    theSys.ChangeBR_CCT(_br, _cct, CURRENT_DEVICE);
-    break;
-    */
-
-  case 0x07:    // lights on
-    theSys.DevSoftSwitch(true, CURRENT_DEVICE);
-    break;
-
-  case 0x08:    // lights off
-    theSys.DevSoftSwitch(false, CURRENT_DEVICE);
-    break;
+    case 0x06:    // CCT--
+      _cct = theSys.GetDevCCT(CURRENT_DEVICE);
+      _cct -= BTN_STEP_SHORT_CCT;
+      theSys.ChangeLampCCT(CURRENT_DEVICE, _br);
+      break;
+    }
   }
 }

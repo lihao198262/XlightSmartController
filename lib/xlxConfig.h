@@ -20,7 +20,10 @@
 #define PACK //MSVS intellisense doesn't work when structs are packed
 
 #define CURRENT_DEVICE              (theConfig.GetMainDeviceID())
-#define IS_CURRENT_DEVICE(nid)      ((nid) == CURRENT_DEVICE || (CURRENT_DEVICE == NODEID_DUMMY && (nid) == NODEID_MAINDEVICE) )
+#define IS_CURRENT_DEVICE(nid)      ((nid) == CURRENT_DEVICE || CURRENT_DEVICE == NODEID_DUMMY)
+
+// Maximum items in AST scenario table
+#define MAX_ASR_SNT_ITEMS           16
 
 //------------------------------------------------------------------
 // Xlight Configuration Data Structures
@@ -62,7 +65,8 @@ typedef struct
   BOOL enableCloudSerialCmd   :1;           // Whether enable cloud serial command
   BOOL enableDailyTimeSync    :1;           // Whether enable daily time synchronization
   BOOL enableSpeaker          :1;           // Whether enable speaker
-  BOOL Reserved_bool          :5;           // Reserved for boolean flags
+  BOOL fixedNID               :1;           // Whether fixed Node ID
+  BOOL Reserved_bool          :4;           // Reserved for boolean flags
   UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
   UC rfPowerLevel             :2;           // RF Power Level 0..3
   BOOL stWiFi                 :1;           // Wi-Fi status: On / Off
@@ -70,6 +74,10 @@ typedef struct
   US maxBaseNetworkDuration;
   UC useCloud;                              // How to depend on the Cloud
   UC mainDevID;                             // NodeID for main device
+  char bleName[24];
+  char blePin[6];
+  char pptAccessCode[8];
+  UC asrSNT[MAX_ASR_SNT_ITEMS];
 } Config_t;
 
 //------------------------------------------------------------------
@@ -136,7 +144,7 @@ typedef struct    // Exact 12 bytes
 	__attribute__((packed))
 {
 	UC nid;
-	UC reserved;
+	UC device;       // Associated device (node id)
   UC identity[LEN_NODE_IDENTITY];
   UL recentActive;
 } NodeIdRow_t;
@@ -246,12 +254,13 @@ public:
   int getFlashSize();
   bool loadList();
   bool saveList();
-  void showList();
-  UC requestNodeID(char type, uint64_t identity);
+  void showList(BOOL toCloud = false, UC nid = 0);
+  void publishNode(NodeIdRow_t _node);
+  UC requestNodeID(UC preferID, char type, uint64_t identity);
   BOOL clearNodeId(UC nodeID);
 
 protected:
-  UC getAvailableNodeId(UC defaultID, UC minID, UC maxID, uint64_t identity);
+  UC getAvailableNodeId(UC preferID, UC defaultID, UC minID, UC maxID, uint64_t identity);
 };
 
 //------------------------------------------------------------------
@@ -340,11 +349,24 @@ public:
   String GetToken();
   void SetToken(const char *strName);
 
+  String GetBLEName();
+  void SetBLEName(const char *strName);
+
+  String GetBLEPin();
+  void SetBLEPin(const char *strPin);
+
+  String GetPPTAccessCode();
+  void SetPPTAccessCode(const char *strPin);
+  BOOL CheckPPTAccessCode(const char *strPin);
+
   BOOL IsCloudSerialEnabled();
   void SetCloudSerialEnabled(BOOL sw = true);
 
   BOOL IsSpeakerEnabled();
   void SetSpeakerEnabled(BOOL sw = true);
+
+  BOOL IsFixedNID();
+  void SetFixedNID(BOOL sw = true);
 
   BOOL IsDailyTimeSyncEnabled();
   void SetDailyTimeSyncEnabled(BOOL sw = true);
@@ -364,6 +386,9 @@ public:
   UC GetMainDeviceType();
   BOOL SetMainDeviceType(UC type);
 
+  UC GetRemoteNodeDevice(UC remoteID);
+  BOOL SetRemoteNodeDevice(UC remoteID, US devID);
+
   UC GetNumDevices();
   BOOL SetNumDevices(UC num);
 
@@ -381,6 +406,10 @@ public:
 
   UC GetRFPowerLevel();
   BOOL SetRFPowerLevel(UC level);
+
+  UC GetASR_SNT(const UC _code);
+  BOOL SetASR_SNT(const UC _code, const UC _snt = 0);
+  void showASRSNT();
 
   NodeListClass lstNodes;
   RemoteStatus_t m_stMainRemote;

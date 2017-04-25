@@ -91,7 +91,7 @@ char* MyParserJson::getJsonString(MyMessage &message, char *buffer) const {
 	    (*jroot)["nd"] = message.getDestination();
 			(*jroot)["sen"] = message.getSensor();
 			(*jroot)["cmd"] = mGetCommand(message.msg);
-			(*jroot)["ack"] = mGetRequestAck(message.msg);
+			(*jroot)["ack"] = (mGetAck(message.msg) ? 2 : mGetRequestAck(message.msg));
 			(*jroot)["typ"] = message.getType();
 			(*jroot)["payl"] = message.getString(payl);
 

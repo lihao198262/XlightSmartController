@@ -5,6 +5,7 @@
 
 #include "xliCommon.h"
 #include "ArduinoJson.h"
+#include "LinkedList.h"
 
 // Comment it off if we don't use Particle public cloud
 /// Notes:
@@ -43,11 +44,14 @@
 #define CLT_TTL_SensorData      RTE_DELAY_PUBLISH
 #define CLT_TTL_MotionData      5
 /// LOG Message
-#define CLT_NAME_LOGMSG          "xlc-event-log"
-#define CLT_TTL_LOGMSG           3600              // 1 hour
+#define CLT_NAME_LOGMSG         "xlc-event-log"
+#define CLT_TTL_LOGMSG          3600              // 1 hour
 /// Device status event
-#define CLT_NAME_DeviceStatus    "xlc-status-device"
-#define CLT_TTL_DeviceStatus     10
+#define CLT_NAME_DeviceStatus   "xlc-status-device"
+#define CLT_TTL_DeviceStatus    10
+/// Device profile event
+#define CLT_NAME_DeviceConfig   "xlc-config-device"
+#define CLT_TTL_DeviceConfig    30
 
 //------------------------------------------------------------------
 // Xlight CloudObj Class
@@ -71,6 +75,8 @@ public:
   uint16_t m_gas;
   uint16_t m_dust;
   uint16_t m_smoke;
+  bool m_sound;
+  uint16_t m_noise;
 
 public:
   CloudObjClass();
@@ -78,10 +84,10 @@ public:
   String GetSysID();
   String GetSysVersion();
 
+  int CldJSONCommand(String jsonCmd);
+  int CldJSONConfig(String jsonData);
   virtual int CldSetTimeZone(String tzStr) = 0;
   virtual int CldPowerSwitch(String swStr) = 0;
-  virtual int CldJSONCommand(String jsonCmd) = 0;
-  virtual int CldJSONConfig(String jsonData) = 0;
   virtual int CldSetCurrentTime(String tmStr) = 0;
   virtual void OnSensorDataChanged(UC _sr) = 0;
   int ProcessJSONString(String inStr);
@@ -93,10 +99,14 @@ public:
   BOOL UpdateGas(uint8_t nid, uint16_t value);
   BOOL UpdateDust(uint8_t nid, uint16_t value);
   BOOL UpdateSmoke(uint8_t nid, uint16_t value);
+  BOOL UpdateSound(uint8_t nid, bool value);
+  BOOL UpdateNoise(uint8_t nid, uint16_t value);
 
   void UpdateJSONData();
   BOOL PublishLog(const char *msg);
   BOOL PublishDeviceStatus(const char *msg);
+  BOOL PublishDeviceConfig(const char *msg);
+  void GotNodeConfigAck(const UC _nodeID, const UC *data);
   BOOL PublishAlarm(const char *msg);
 
 protected:
@@ -106,6 +116,9 @@ protected:
   JsonObject *m_jpRoot;
   JsonObject *m_jpData;
   JsonObject *m_jpCldCmd;
+
+  LinkedList<String> m_cmdList;
+  LinkedList<String> m_configList;
 };
 
 #endif /* xliCloudObj_h */

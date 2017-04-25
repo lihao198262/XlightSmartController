@@ -1029,7 +1029,7 @@ void RF24::enableDynamicPayloads(bool _enable)
     dynamic_payloads_enabled = false;
     return;
   }
-  
+
   // Enable dynamic payload throughout the system
   write_register(FEATURE,read_register(FEATURE) | _BV(EN_DPL) );
 

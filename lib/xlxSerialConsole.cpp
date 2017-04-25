@@ -48,6 +48,7 @@
 #include "xlxPanel.h"
 #include "xlxRF24Server.h"
 #include "xlxASRInterface.h"
+#include "xlxBLEInterface.h"
 
 //------------------------------------------------------------------
 // the one and only instance of SerialConsoleClass
@@ -203,7 +204,7 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
     SERIAL_LN("   wifi:  check Wi-Fi module status");
     SERIAL_LN("   wlan:  check internet status");
     SERIAL_LN("e.g. check rf\n\r");
-    CloudOutput("check ble|flash|rf|wifi|wlan");
+    //CloudOutput("check ble|flash|rf|wifi|wlan");
   } else if(strTopic.equals("show")) {
     SERIAL_LN("--- Command: show <object> ---");
     SERIAL_LN("To show value or summary information, where <object> could be:");
@@ -220,22 +221,23 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
     SERIAL_LN("   table:   show working memory tables");
     SERIAL_LN("   device:  show functional devices");
     SERIAL_LN("   remote:  show remotes");
+    SERIAL_LN("   asrsnt:  show ASR command scenario table");
     SERIAL_LN("   version: show firmware version");
     SERIAL_LN("e.g. show rf\n\r");
-    CloudOutput("show ble|debug|dev|flag|net|node|rf|time|var|table|version");
+    //CloudOutput("show ble|debug|dev|flag|net|node|rf|time|var|table|version");
   } else if(strTopic.equals("ping")) {
     SERIAL_LN("--- Command: ping <address> ---");
     SERIAL_LN("To ping an IP or domain name, default address is 8.8.8.8");
     SERIAL_LN("e.g. ping www.google.com");
     SERIAL_LN("e.g. ping 192.168.0.1\n\r");
-    CloudOutput("ping <address>");
+    //CloudOutput("ping <address>");
   } else if(strTopic.equals("do")) {
     SERIAL_LN("--- Command: do <action parameters> ---");
     SERIAL_LN("To execute action, e.g. turn on the lamp");
     SERIAL_LN("e.g. do on");
     SERIAL_LN("e.g. do off");
     SERIAL_LN("e.g. do color R,G,B\n\r");
-    CloudOutput("do on|off|color");
+    //CloudOutput("do on|off|color");
   } else if(strTopic.equals("test")) {
     SERIAL_LN("--- Command: test <action parameters> ---");
     SERIAL_LN("To perform testing, where <action> could be:");
@@ -244,26 +246,29 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
     SERIAL_LN("   ping <ip address>: ping ip address");
     SERIAL_LN("   send <NodeId:MessageId[:Payload]>: send test message to node");
     SERIAL_LN("   send <message>: send MySensors format message");
+    SERIAL_LN("   ble <message>: send message via BLE");
     SERIAL_LN("   asr <cmd>: send command to ASR module\n\r");
-    CloudOutput("test ping|send");
+    //CloudOutput("test ping|send|ble|asr");
   } else if(strTopic.equals("send")) {
     SERIAL_LN("--- Command: send <message> or <NodeId:MessageId[:Payload]> ---");
     SERIAL_LN("To send testing message");
     SERIAL_LN("e.g. send 0:1");
     SERIAL_LN("e.g. send 0;1;0;0;6;");
     SERIAL_LN("e.g. send 0;1;1;0;0;23.5\n\r");
-    CloudOutput("send <msg> or <NodeId:MsgId[:Pload]>");
+    //CloudOutput("send <msg> or <NodeId:MsgId[:Pload]>");
   } else if(strTopic.equals("set")) {
     char *sObj = next();
     if( sObj ) {
       if (strnicmp(sObj, "flag", 4) == 0) {
         SERIAL_LN("--- Command: set flag <flag name> [0|1] ---");
-        SERIAL_LN("<flag name>: csc, cdts");
+        SERIAL_LN("<flag name>: csc, cdts, fnid");
         SERIAL_LN("e.g. set flag csc [0|1]");
         SERIAL_LN("     , enable or disable Cloud Serial Command");
         SERIAL_LN("e.g. set flag cdts [0|1]");
         SERIAL_LN("     , enable or disable Cloud Daily Time Sync");
-        CloudOutput("set flag csc|cdts");
+        SERIAL_LN("e.g. set flag fnid [0|1]");
+        SERIAL_LN("     , enable or disable Fixed NodeID");
+        //CloudOutput("set flag csc|cdts");
       } else if (strnicmp(sObj, "var", 3) == 0) {
         SERIAL_LN("--- Command: set var <var name> <value> ---");
         SERIAL_LN("<var name>: senmap, devst, rfpl");
@@ -273,15 +278,15 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
         SERIAL_LN("     , set Device Status to sleep mode");
         SERIAL_LN("e.g. set var rfpl [0..3]");
         SERIAL_LN("     , set RF Power Level to min(0), low(1), high(2) or max(3)");
-        CloudOutput("set var senmap|devst|rfpl");
+        //CloudOutput("set var senmap|devst|rfpl");
       } else if (strnicmp(sObj, "spkr", 4) == 0) {
         SERIAL_LN("--- Command: set spkr [0|1] ---");
         SERIAL_LN("To disable or enable speaker");
-        CloudOutput("set spkr 0|1");
+        //CloudOutput("set spkr 0|1");
       } else if (strnicmp(sObj, "cloud", 5) == 0) {
         SERIAL_LN("--- Command: set cloud [0|1|2] ---");
         SERIAL_LN("To disable, enable or require cloud");
-        CloudOutput("set cloud 0|1|2");
+        //CloudOutput("set cloud 0|1|2");
       }
     } else {
       SERIAL_LN("--- Command: set <object value> ---");
@@ -308,10 +313,20 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
       SERIAL_LN("     , cloud option disable|enable|must");
       SERIAL_LN("e.g. set maindev <nodeid>");
       SERIAL_LN("     , to change the main device");
+      SERIAL_LN("e.g. set remote <nodeid device>");
+      SERIAL_LN("     , to assign device to remote");
+      SERIAL_LN("e.g. set blename <BLEName>");
+      SERIAL_LN("     , to change BLE SSID");
+      SERIAL_LN("e.g. set blepin <BLEPin>");
+      SERIAL_LN("     , to change BLE Pin");
+      SERIAL_LN("e.g. set pptpin <PPTPin>");
+      SERIAL_LN("     , to change PPT access code");
+      SERIAL_LN("e.g. set asrsnt <code scenario_id>");
+      SERIAL_LN("     , to set scenario for ASR command");
       SERIAL_LN("e.g. set debug [log:level]");
       SERIAL_LN("     , where log is [serial|flash|syslog|cloud|all");
       SERIAL_LN("     and level is [none|alter|critical|error|warn|notice|info|debug]\n\r");
-      CloudOutput("set tz|dst|nodeid|base|spkr|flag|var|cloud|maindev|debug");
+      //CloudOutput("set tz|dst|nodeid|base|spkr|flag|var|cloud|maindev|debug|blename|blepin");
     }
   } else if(strTopic.equals("sys")) {
     SERIAL_LN("--- Command: sys <mode> ---");
@@ -330,12 +345,12 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
     SERIAL_LN("e.g. sys clear nodeid 1");
     SERIAL_LN("e.g. sys clear credientials");
     SERIAL_LN("e.g. sys reset\n\r");
-    CloudOutput("sys base|private|reset|safe|setup|dfu|update|serial|sync|clear");
+    //CloudOutput("sys base|private|reset|safe|setup|dfu|update|serial|sync|clear");
   } else {
     SERIAL_LN("Available Commands:");
     SERIAL_LN("    check, show, ping, do, test, send, set, sys, help or ?");
     SERIAL_LN("Use 'help <command>' for more information\n\r");
-    CloudOutput("check, show, ping, do, test, send, set, sys, help or ?");
+    //CloudOutput("check, show, ping, do, test, send, set, sys, help or ?");
   }
 
   return true;
@@ -375,22 +390,26 @@ bool SerialConsoleClass::doCheck(const char *cmd)
       SERIAL_LN("**RF module is %s\n\r", (theRadio.isValid() ? "available" : "not available!"));
       CloudOutput("RF module is %s", (theRadio.isValid() ? "available" : "not available!"));
     } else if (strnicmp(sTopic, "wifi", 4) == 0) {
-        SERIAL("**Wi-Fi module is %s, ", (WiFi.ready() ? "ready" : "not ready!"));
-        int lv_RSSI = WiFi.RSSI();
-        if( lv_RSSI < 0 ) {
-          SERIAL_LN("RSSI=%ddB\n\r", WiFi.RSSI());
-        } else if( lv_RSSI == 1 ) {
-          SERIAL_LN("Wi-Fi chip error\n\r");
-        } else {
-          SERIAL_LN("time-out\n\r");
-        }
-        CloudOutput("Wi-Fi module is %s, RSSI=%ddB", (WiFi.ready() ? "ready" : "not ready!"), lv_RSSI);
+      SERIAL("**Wi-Fi module is %s, ", (WiFi.ready() ? "ready" : "not ready!"));
+      int lv_RSSI = WiFi.RSSI();
+      if( lv_RSSI < 0 ) {
+        SERIAL_LN("RSSI=%ddB\n\r", WiFi.RSSI());
+      } else if( lv_RSSI == 1 ) {
+        SERIAL_LN("Wi-Fi chip error\n\r");
+      } else {
+        SERIAL_LN("time-out\n\r");
+      }
+      CloudOutput("Wi-Fi module is %s, RSSI=%ddB", (WiFi.ready() ? "ready" : "not ready!"), lv_RSSI);
     } else if (strnicmp(sTopic, "wlan", 4) == 0) {
-        SERIAL_LN("**Resolving IP for www.google.com...%s\n\r", (WiFi.resolve("www.google.com") ? "OK" : "failed!"));
-        CloudOutput("WLAN is OK");
+      SERIAL_LN("**Resolving IP for www.google.com...%s\n\r", (WiFi.resolve("www.google.com") ? "OK" : "failed!"));
+      CloudOutput("WLAN is OK");
     } else if (strnicmp(sTopic, "flash", 5) == 0) {
-        SERIAL_LN("** Free memory: %lu bytes, total EEPROM space: %lu bytes\n\r", System.freeMemory(), EEPROM.length());
-        CloudOutput("Free memory: %lu bytes, total EEPROM space: %lu bytes", System.freeMemory(), EEPROM.length());
+      SERIAL_LN("** Free memory: %lu bytes, total EEPROM space: %lu bytes\n\r", System.freeMemory(), EEPROM.length());
+      CloudOutput("Free mem: %lu, total EEPROM space: %lu", System.freeMemory(), EEPROM.length());
+    } else if (strnicmp(sTopic, "ble", 3) == 0) {
+      // Send test command and check received message
+      theBLE.config();
+      //SERIAL_LN("** BLE Module is %s **", theBLE.isGood() ? "good" : "error");
     } else {
       retVal = false;
     }
@@ -434,114 +453,119 @@ bool SerialConsoleClass::doShow(const char *cmd)
           PrintUint64(strDisplay, theRadio.getCurrentNetworkID()),
           PrintMacAddress(strDisplay, mac),
           WiFi.SSID());
-	} else if (strnicmp(sTopic, "node", 4) == 0) {
+	  } else if (strnicmp(sTopic, "node", 4) == 0) {
       uint8_t lv_NodeID = theRadio.getAddress();
       SERIAL_LN("**NodeID: %d (%s), Status: %d", lv_NodeID, (lv_NodeID==GATEWAY_ADDRESS ? "Gateway" : (lv_NodeID==AUTO ? "AUTO" : "Node")), theSys.GetStatus());
       SERIAL_LN("  Product Info: %s-%s-%d", theConfig.GetOrganization().c_str(), theConfig.GetProductName().c_str(), theConfig.GetVersion());
       SERIAL_LN("  System Info: %s-%s\n\r", theSys.GetSysID().c_str(), theSys.GetSysVersion().c_str());
       CloudOutput("NodeID: %d (%s), Status: %d", lv_NodeID, (lv_NodeID==GATEWAY_ADDRESS ? "Gateway" : (lv_NodeID==AUTO ? "AUTO" : "Node")), theSys.GetStatus());
-  } else if (strnicmp(sTopic, "button", 6) == 0) {
+    } else if (strnicmp(sTopic, "button", 6) == 0) {
       SERIAL_LN("Knob status - Dimmer:%d, Button:%d, CCT Flag:%d\n\r",  thePanel.GetDimmerValue(), thePanel.GetButtonStatus(), thePanel.GetCCTFlag());
       CloudOutput("Dimmer:%d, Button:%d, CCT Flag:%d", thePanel.GetDimmerValue(), thePanel.GetButtonStatus(), thePanel.GetCCTFlag());
-  } else if (strnicmp(sTopic, "nlist", 5) == 0) {
+    } else if (strnicmp(sTopic, "nlist", 5) == 0) {
       SERIAL_LN("**Node List count:%d, size:%d", theConfig.lstNodes.count(), theConfig.lstNodes.size());
       theConfig.lstNodes.showList();
       CloudOutput("Nodelist count:%d, size:%d", theConfig.lstNodes.count(), theConfig.lstNodes.size());
-	} else if (strnicmp(sTopic, "ble", 3) == 0) {
-      // ToDo: show BLE summay
-      SERIAL_LN("");
-      CloudOutput("");
-	} else if (strnicmp(sTopic, "rf", 2) == 0) {
+    } else if (strnicmp(sTopic, "asrsnt", 6) == 0) {
+      theConfig.showASRSNT();
+  	} else if (strnicmp(sTopic, "rf", 2) == 0) {
       theRadio.PrintRFDetails();
       SERIAL_LN("");
-	} else if (strnicmp(sTopic, "time", 4) == 0) {
+    } else if (strnicmp(sTopic, "ble", 3) == 0) {
+      SERIAL_LN("** BLE Module is %s **", theBLE.isGood() ? "good" : "error");
+      SERIAL_LN("  Name:%s, PIN:%s", theBLE.getName().c_str(), theBLE.getPin().c_str());
+      SERIAL_LN("  Speed: %d, State: %d, AT Mode: %d", theBLE.getSpeed(), theBLE.getState(), theBLE.isATMode());
+      CloudOutput("BLE:%d Name:%s State:%d Speed:%d", theBLE.isGood(), theBLE.getName().c_str(), theBLE.getState(), theBLE.getSpeed());
+  	} else if (strnicmp(sTopic, "time", 4) == 0) {
       time_t time = Time.now();
       SERIAL_LN("Now is %s, %s\n\r", Time.format(time, TIME_FORMAT_ISO8601_FULL).c_str(), theSys.m_tzString.c_str());
       CloudOutput("Local time %s, %s", Time.format(time, TIME_FORMAT_ISO8601_FULL).c_str(), theSys.m_tzString.c_str());
-	} else if (strnicmp(sTopic, "var", 3) == 0) {
-		SERIAL_LN("theSys.mSysID = \t\t\t%s", theSys.m_SysID.c_str());
-		SERIAL_LN("theSys.m_SysVersion = \t\t\t%s", theSys.m_SysVersion.c_str());
-		SERIAL_LN("theSys.m_SysStatus = \t\t\t%d", theSys.m_SysStatus);
-    SERIAL_LN("theConfig.useCloud = \t\t\t%d", theConfig.GetUseCloud());
-		SERIAL_LN("theSys.m_tzString = \t\t\t%s", theSys.m_tzString.c_str());
-		SERIAL_LN("theSys.m_jsonData = \t\t\t%s", theSys.m_jsonData.c_str());
-    SERIAL_LN("theSys.m_strCldCmd = \t\t%s\n\r", theSys.m_strCldCmd.c_str());
-		SERIAL_LN("theSys.m_lastMsg = \t\t\t%s", theSys.m_lastMsg.c_str());
-    SERIAL_LN("");
-    SERIAL_LN("mConfig.sensorBitmap = \t\t\t0x%04X", theConfig.GetSensorBitmap());
-    SERIAL_LN("mConfig.indBrightness = \t\t%d", theConfig.GetBrightIndicator());
-		SERIAL_LN("mConfig.rfPowerLevel = \t\t\t%d", theConfig.GetRFPowerLevel());
-    SERIAL_LN("theSys.m_temperature = \t\t\t%.2f", theSys.m_temperature);
-		SERIAL_LN("theSys.m_humidity = \t\t\t%.2f", theSys.m_humidity);
-		SERIAL_LN("theSys.m_brightness = \t\t\t%u", theSys.m_brightness);
-		SERIAL_LN("theSys.m_motion = \t\t\t%s", (theSys.m_motion ? "true" : "false"));
-    SERIAL_LN("");
-    SERIAL_LN("Main DeviceID = \t\t\t%d", CURRENT_DEVICE);
-    SERIAL_LN("mConfig.typeMainDevice = \t\t%d", theConfig.GetMainDeviceType());
-    SERIAL_LN("mConfig.numDevices = \t\t\t%d", theConfig.GetNumDevices());
-    SERIAL_LN("mConfig.numNodes = \t\t\t%d", theConfig.GetNumNodes());
-    SERIAL_LN("mConfig.maxBaseNetworkDuration = \t%d\n\r", theConfig.GetMaxBaseNetworkDur());
-  } else if (strnicmp(sTopic, "flag", 4) == 0) {
-		SERIAL_LN("theSys.m_isRF = \t\t\t%s", (theSys.IsRFGood() ? "true" : "false"));
-		SERIAL_LN("theSys.m_isBLE = \t\t\t%s", (theSys.IsBLEGood() ? "true" : "false"));
-		SERIAL_LN("theSys.m_isLAN = \t\t\t%s", (theSys.IsLANGood() ? "true" : "false"));
-		SERIAL_LN("theSys.m_isWAN = \t\t\t%s", (theSys.IsWANGood() ? "true" : "false"));
-    SERIAL_LN("");
-    SERIAL_LN("mConfig.enableCloudSerialCmd = \t\t%s", (theConfig.IsCloudSerialEnabled() ? "true" : "false"));
-    SERIAL_LN("mConfig.enableDailyTimeSync = \t\t%s", (theConfig.IsDailyTimeSyncEnabled() ? "true" : "false"));
-    SERIAL_LN("mConfig.enableSpeaker = \t\t%s", (theConfig.IsSpeakerEnabled() ? "true" : "false"));
-    SERIAL_LN("theRadio._bBaseNetworkEnabled = \t%s", (theRadio.isBaseNetworkEnabled() ? "true" : "false"));
-    SERIAL_LN("theConfig.stWiFi = \t\t\t%s", (theConfig.GetWiFiStatus() ? "On" : "Off"));
-    SERIAL_LN("");
-		SERIAL_LN("theConfig.m_isLoaded = \t\t\t%s", (theConfig.IsConfigLoaded() ? "true" : "false"));
-		SERIAL_LN("theConfig.m_isChanged = \t\t%s", (theConfig.IsConfigChanged() ? "true" : "false"));
-		SERIAL_LN("theConfig.m_isDSTChanged = \t\t%s", (theConfig.IsDSTChanged() ? "true" : "false"));
-		SERIAL_LN("theConfig.m_isSCTChanged = \t\t%s", (theConfig.IsSCTChanged() ? "true" : "false"));
-		SERIAL_LN("theConfig.m_isRTChanged = \t\t%s", (theConfig.IsRTChanged() ? "true" : "false"));
-		SERIAL_LN("theConfig.m_isSNTChanged = \t\t%s", (theConfig.IsSNTChanged() ? "true" : "false"));
-    SERIAL_LN("theConfig.IsNIDChanged = \t\t%s\n\r", (theConfig.IsNIDChanged() ? "true" : "false"));
-	} else if (strnicmp(sTopic, "table", 5) == 0) {
-		SERIAL_LN("DST_ROW_SIZE: \t\t\t\t%u", DST_ROW_SIZE);
-		SERIAL_LN("RT_ROW_SIZE: \t\t\t\t%u", RT_ROW_SIZE);
-		SERIAL_LN("SCT_ROW_SIZE: \t\t\t\t%u", SCT_ROW_SIZE);
-		SERIAL_LN("MAX_SCT_ROWS: \t\t\t\t%d", MAX_SCT_ROWS);
-		SERIAL_LN("SNT_ROW_SIZE: \t\t\t\t%u", SNT_ROW_SIZE);
+  	} else if (strnicmp(sTopic, "var", 3) == 0) {
+  		SERIAL_LN("mSysID = \t\t\t%s", theSys.m_SysID.c_str());
+  		SERIAL_LN("m_SysStatus = \t\t\t%d", theSys.m_SysStatus);
+      SERIAL_LN("useCloud = \t\t\t%d", theConfig.GetUseCloud());
+  		SERIAL_LN("m_tzString = \t\t\t%s", theSys.m_tzString.c_str());
+  		SERIAL_LN("m_jsonData = \t\t\t%s", theSys.m_jsonData.c_str());
+      SERIAL_LN("m_strCldCmd = \t\t%s\n\r", theSys.m_strCldCmd.c_str());
+  		SERIAL_LN("m_lastMsg = \t\t\t%s", theSys.m_lastMsg.c_str());
+      SERIAL_LN("");
+      SERIAL_LN("sensorBitmap = \t\t\t0x%04X", theConfig.GetSensorBitmap());
+      SERIAL_LN("indBrightness = \t\t%d", theConfig.GetBrightIndicator());
+  		SERIAL_LN("rfPowerLevel = \t\t\t%d", theConfig.GetRFPowerLevel());
+      SERIAL_LN("m_temperature = \t\t%.2f", theSys.m_temperature);
+  		SERIAL_LN("m_humidity = \t\t\t%.2f", theSys.m_humidity);
+  		SERIAL_LN("m_brightness = \t\t\t%u", theSys.m_brightness);
+  		SERIAL_LN("m_motion = \t\t\t%s", (theSys.m_motion ? "true" : "false"));
+      SERIAL_LN("");
+      SERIAL_LN("Main DeviceID = \t\t%d", CURRENT_DEVICE);
+      SERIAL_LN("typeMainDevice = \t\t%d", theConfig.GetMainDeviceType());
+      SERIAL_LN("numDevices = \t\t\t%d", theConfig.GetNumDevices());
+      SERIAL_LN("numNodes = \t\t\t%d", theConfig.GetNumNodes());
+      SERIAL_LN("maxBaseNetworkDuration = \t%d", theConfig.GetMaxBaseNetworkDur());
+      SERIAL_LN("PPT Pin = %s\n\r", theConfig.GetPPTAccessCode().c_str());
+    } else if (strnicmp(sTopic, "flag", 4) == 0) {
+  		SERIAL_LN("m_isRF = \t\t\t%s", (theSys.IsRFGood() ? "true" : "false"));
+  		SERIAL_LN("m_isBLE = \t\t\t%s", (theSys.IsBLEGood() ? "true" : "false"));
+  		SERIAL_LN("m_isLAN = \t\t\t%s", (theSys.IsLANGood() ? "true" : "false"));
+  		SERIAL_LN("m_isWAN = \t\t\t%s", (theSys.IsWANGood() ? "true" : "false"));
+      SERIAL_LN("");
+      SERIAL_LN("fixedNodeID = \t\t\t%s", (theConfig.IsFixedNID() ? "true" : "false"));
+      SERIAL_LN("enableCloudSerialCmd = \t\t%s", (theConfig.IsCloudSerialEnabled() ? "true" : "false"));
+      SERIAL_LN("enableDailyTimeSync = \t\t%s", (theConfig.IsDailyTimeSyncEnabled() ? "true" : "false"));
+      SERIAL_LN("enableSpeaker = \t\t%s", (theConfig.IsSpeakerEnabled() ? "true" : "false"));
+      SERIAL_LN("bBaseNetworkEnabled = \t\t%s", (theRadio.isBaseNetworkEnabled() ? "true" : "false"));
+      SERIAL_LN("stWiFi = \t\t\t%s", (theConfig.GetWiFiStatus() ? "On" : "Off"));
+      SERIAL_LN("");
+  		SERIAL_LN("m_isLoaded = \t\t\t%s", (theConfig.IsConfigLoaded() ? "true" : "false"));
+  		SERIAL_LN("m_isChanged = \t\t\t%s", (theConfig.IsConfigChanged() ? "true" : "false"));
+  		SERIAL_LN("m_isDSTChanged = \t\t%s", (theConfig.IsDSTChanged() ? "true" : "false"));
+  		SERIAL_LN("m_isSCTChanged = \t\t%s", (theConfig.IsSCTChanged() ? "true" : "false"));
+  		SERIAL_LN("m_isRTChanged = \t\t%s", (theConfig.IsRTChanged() ? "true" : "false"));
+  		SERIAL_LN("m_isSNTChanged = \t\t%s", (theConfig.IsSNTChanged() ? "true" : "false"));
+      SERIAL_LN("IsNIDChanged = \t\t\t%s\n\r", (theConfig.IsNIDChanged() ? "true" : "false"));
+  	} else if (strnicmp(sTopic, "table", 5) == 0) {
+  		SERIAL_LN("DST_ROW_SIZE: \t\t\t\t%u", DST_ROW_SIZE);
+  		SERIAL_LN("RT_ROW_SIZE: \t\t\t\t%u", RT_ROW_SIZE);
+  		SERIAL_LN("SCT_ROW_SIZE: \t\t\t\t%u", SCT_ROW_SIZE);
+  		SERIAL_LN("MAX_SCT_ROWS: \t\t\t\t%d", MAX_SCT_ROWS);
+  		SERIAL_LN("SNT_ROW_SIZE: \t\t\t\t%u", SNT_ROW_SIZE);
 
-		SERIAL_LN("");
-    SERIAL_LN("DevStatus_table %d items:", theSys.DevStatus_table.size());
-    for (int i = 0; i < theSys.DevStatus_table.size(); i++)
-      theSys.print_devStatus_table(i);
-    SERIAL_LN("");
-    SERIAL_LN("Rule_table %d items:", theSys.Rule_table.size());
-    for (int i = 0; i < theSys.Rule_table.size(); i++)
-      theSys.print_rule_table(i);
-    SERIAL_LN("");
-    SERIAL_LN("Schedule_table %d items:", theSys.Schedule_table.size());
-    for (int i = 0; i < theSys.Schedule_table.size(); i++)
-      theSys.print_schedule_table(i);
-    SERIAL_LN("");
-    SERIAL_LN("Scenario_table %d items:", theSys.Scenario_table.size());
-    for (int i = 0; i < theSys.Scenario_table.size(); i++)
-      theSys.print_scenario_table(i);
-    SERIAL_LN("");
-  } else if (strnicmp(sTopic, "device", 6) == 0) {
-    SERIAL_LN("DST_ROW_SIZE: \t\t\t\t%u, items: %d", DST_ROW_SIZE, theSys.DevStatus_table.size());
-    SERIAL_LN("DevStatus_table:");
-    CloudOutput(theSys.print_devStatus_table(0));
-		for (int i = 1; i < theSys.DevStatus_table.size(); i++) {
-			theSys.print_devStatus_table(i);
-    }
-    SERIAL_LN("");
-  } else if (strnicmp(sTopic, "remote", 6) == 0) {
-    SERIAL("Main remote: %d type: %d", theConfig.m_stMainRemote.node_id, theConfig.m_stMainRemote.type);
-    SERIAL_LN(" %s token: %d", (theConfig.m_stMainRemote.present ? "present" : "not present"), theConfig.m_stMainRemote.token);
-    SERIAL_LN("");
-  } else if (strnicmp(sTopic, "version", 7) == 0) {
-      SERIAL_LN("System version: %s\n\r", System.version().c_str());
-      CloudOutput("System version: %s", System.version().c_str());
-	} else if (strnicmp(sTopic, "debug", 5) == 0) {
+  		SERIAL_LN("");
+      SERIAL_LN("DevStatus_table %d items:", theSys.DevStatus_table.size());
+      for (int i = 0; i < theSys.DevStatus_table.size(); i++)
+        theSys.print_devStatus_table(i);
+      SERIAL_LN("");
+      SERIAL_LN("Rule_table %d items:", theSys.Rule_table.size());
+      for (int i = 0; i < theSys.Rule_table.size(); i++)
+        theSys.print_rule_table(i);
+      SERIAL_LN("");
+      SERIAL_LN("Schedule_table %d items:", theSys.Schedule_table.size());
+      for (int i = 0; i < theSys.Schedule_table.size(); i++)
+        theSys.print_schedule_table(i);
+      SERIAL_LN("");
+      SERIAL_LN("Scenario_table %d items:", theSys.Scenario_table.size());
+      for (int i = 0; i < theSys.Scenario_table.size(); i++)
+        theSys.print_scenario_table(i);
+      SERIAL_LN("");
+    } else if (strnicmp(sTopic, "device", 6) == 0) {
+      SERIAL_LN("DST_ROW_SIZE: \t\t\t\t%u, items: %d", DST_ROW_SIZE, theSys.DevStatus_table.size());
+      SERIAL_LN("DevStatus_table:");
+      CloudOutput(theSys.print_devStatus_table(0));
+  		for (int i = 1; i < theSys.DevStatus_table.size(); i++) {
+  			theSys.print_devStatus_table(i);
+      }
+      SERIAL_LN("");
+    } else if (strnicmp(sTopic, "remote", 6) == 0) {
+      SERIAL("Main remote: %d type: %d", theConfig.m_stMainRemote.node_id, theConfig.m_stMainRemote.type);
+      SERIAL_LN(" %s token: %d", (theConfig.m_stMainRemote.present ? "present" : "not present"), theConfig.m_stMainRemote.token);
+      SERIAL_LN("");
+    } else if (strnicmp(sTopic, "version", 7) == 0) {
+      SERIAL_LN("System  Version: %s", System.version().c_str());
+      SERIAL_LN("Product Version: %d\n\r", theConfig.GetVersion());
+      CloudOutput("Version Sys: %s Prod: %d", System.version().c_str(), theConfig.GetVersion());
+  	} else if (strnicmp(sTopic, "debug", 5) == 0) {
       CloudOutput(theLog.PrintDestInfo());
-	} else {
+  	} else {
       retVal = false;
     }
   } else {
@@ -570,12 +594,12 @@ bool SerialConsoleClass::doAction(const char *cmd)
   char *sTopic = next();
   if( sTopic ) {
     if (strnicmp(sTopic, "on", 2) == 0) {
-      // ToDo:
       SERIAL_LN("**Light is ON\n\r");
+      theSys.DevSoftSwitch(DEVICE_SW_ON);
       retVal = true;
     } else if (strnicmp(sTopic, "off", 3) == 0) {
-      // ToDo:
       SERIAL_LN("**Light is OFF\n\r");
+      theSys.DevSoftSwitch(DEVICE_SW_OFF);
       retVal = true;
     } else if (strnicmp(sTopic, "color", 5) == 0) {
       // ToDo:
@@ -620,7 +644,18 @@ bool SerialConsoleClass::doTest(const char *cmd)
     } else if (strnicmp(sTopic, "asr", 3) == 0) {
       char *sParam = next();
       if( strlen(sParam) > 0 ) {
+        SERIAL("\n\r");
         theASR.sendCommand(atoi(sParam));
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "ble", 3) == 0) {
+      char *sParam = next();
+      if( strlen(sParam) >= 3 ) {
+        String strMsg = sParam;
+        if( strMsg.charAt(strMsg.length()-1) != '\n') {
+          strMsg += '\n';
+        }
+        theBLE.sendCommand(strMsg);
         retVal = true;
       }
     }
@@ -729,6 +764,11 @@ bool SerialConsoleClass::doSet(const char *cmd)
             SERIAL_LN("Cloud Daily TimeSync is %s\n\r", (theConfig.IsDailyTimeSyncEnabled() ? "enabled" : "disabled"));
             CloudOutput("Cloud Daily TimeSync is %s", (theConfig.IsDailyTimeSyncEnabled() ? "enabled" : "disabled"));
             retVal = true;
+          } else if (strnicmp(sParam1, "fnid", 4) == 0) {
+            theConfig.SetFixedNID(atoi(sParam2) > 0);
+            SERIAL_LN("Fixed NodeID is %s\n\r", (theConfig.IsFixedNID() ? "enabled" : "disabled"));
+            CloudOutput("Fixed NodeID:%d", theConfig.IsFixedNID());
+            retVal = true;
           }
         } else {
           SERIAL_LN("Require flag value, use '? set flag' for detail\n\r");
@@ -794,7 +834,7 @@ bool SerialConsoleClass::doSet(const char *cmd)
         retVal = true;
       }
     } else if (strnicmp(sTopic, "maindev", 7) == 0) {
-      // Cloud Option
+      // Main device id
       sParam1 = next();
       if( sParam1) {
         theConfig.SetMainDeviceID(atoi(sParam1));
@@ -803,6 +843,73 @@ bool SerialConsoleClass::doSet(const char *cmd)
         retVal = true;
       } else {
         SERIAL_LN("Require a valid nodeID\n\r");
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "remote", 6) == 0) {
+      // Remote controlled device
+      sParam1 = next();     // Get remote node_id
+      if( sParam1) {
+        sParam2 = next();   // Get device node_id
+        if( sParam2 ) {
+          theConfig.SetRemoteNodeDevice(atoi(sParam1), atoi(sParam2));
+          SERIAL_LN("Remote %s controls device %s\n\r", sParam1, sParam2);
+          CloudOutput("Remote %s controls device %s", sParam1, sParam2);
+          retVal = true;
+        } else {
+          SERIAL_LN("Require a valid device nodeID\n\r");
+          retVal = true;
+        }
+      } else {
+        SERIAL_LN("Require a valid remote nodeID\n\r");
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "blename", 7) == 0) {
+      // BLE Name
+      sParam1 = next();
+      if( sParam1) {
+        theConfig.SetBLEName(sParam1);
+        SERIAL_LN("Set BLE name to %s\n\r", sParam1);
+        CloudOutput("Set BLE name to %s", sParam1);
+        retVal = true;
+      } else {
+        SERIAL_LN("Require BLE name string\n\r");
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "blepin", 6) == 0) {
+      // BLE Pin
+      sParam1 = next();
+      if( strlen(sParam1) == 4 ) {
+        theConfig.SetBLEPin(sParam1);
+        SERIAL_LN("Set BLE PIN to %s\n\r", sParam1);
+        CloudOutput("Set BLE PIN to %s", sParam1);
+        retVal = true;
+      } else {
+        SERIAL_LN("Require 4 digits BLE pin\n\r");
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "pptpin", 6) == 0) {
+      // PPT Access Code
+      sParam1 = next();
+      theConfig.SetPPTAccessCode(sParam1);
+      SERIAL_LN("Set PPT PIN to %s\n\r", sParam1);
+      CloudOutput("Set PPT PIN to %s", sParam1);
+      retVal = true;
+    } else if (strnicmp(sTopic, "asrsnt", 6) == 0) {
+      // ASR command scenario
+      sParam1 = next();     // Get code
+      if( sParam1) {
+        sParam2 = next();   // Get scenario id
+        if( sParam2 ) {
+          theConfig.SetASR_SNT((UC)atoi(sParam1), (UC)atoi(sParam2));
+          SERIAL_LN("ASR cmd %s will trigger SNT_id %s\n\r", sParam1, sParam2);
+          CloudOutput("asrcmd:%s SNT_id:%s", sParam1, sParam2);
+          retVal = true;
+        } else {
+          SERIAL_LN("Require a valid ASR code (1 to 16)\n\r");
+          retVal = true;
+        }
+      } else {
+        SERIAL_LN("Require a valid scenario ID\n\r");
         retVal = true;
       }
     } else if (strnicmp(sTopic, "debug", 5) == 0) {

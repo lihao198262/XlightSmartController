@@ -12,6 +12,7 @@ private:
   ShiftRegister74HC595 *m_pHC595;
   int16_t m_nDimmerValue;
   int16_t m_nCCTValue;
+  bool m_stSwitch;
   bool m_bCCTFlag;
   uint32_t m_nCCTick;
 
@@ -31,6 +32,7 @@ public:
   bool ProcessEncoder();
   bool CheckLEDRing(uint8_t _testno = 0);
   void SetRingPos(uint8_t _pos);
+  bool GetRingOnOff();
   void SetRingOnOff(bool _switch);
 
   int16_t GetDimmerValue();

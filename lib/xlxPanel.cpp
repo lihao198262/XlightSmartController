@@ -56,6 +56,7 @@ xlPanelClass::xlPanelClass()
   m_nDimmerValue = 0;
   m_nCCTValue = 0;
   m_bCCTFlag = false;
+  m_stSwitch = false;
 }
 
 xlPanelClass::~xlPanelClass()
@@ -250,6 +251,11 @@ void xlPanelClass::SetRingPos(uint8_t _pos)
   }
 }
 
+bool xlPanelClass::GetRingOnOff()
+{
+  return m_stSwitch;
+}
+
 void xlPanelClass::SetRingOnOff(bool _switch)
 {
   if( !m_pHC595 ) return;
@@ -259,6 +265,7 @@ void xlPanelClass::SetRingOnOff(bool _switch)
   } else {
     pos = (_switch ? map(m_nDimmerValue, 0, 100, 0, PANEL_NUM_LEDS_RING) : 0);
   }
+  m_stSwitch = _switch;
   SetRingPos(pos);
 }
 

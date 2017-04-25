@@ -24,12 +24,14 @@
 **/
 #include "xlSmartController.h"
 #include "xliPinMap.h"
+#include "xliNodeConfig.h"
 #include "xlxConfig.h"
 #include "xlxLogger.h"
 #include "xlxPanel.h"
 #include "xlxRF24Server.h"
 #include "xlxSerialConsole.h"
 #include "xlxASRInterface.h"
+#include "xlxBLEInterface.h"
 
 #include "Adafruit_DHT.h"
 #include "ArduinoJson.h"
@@ -74,7 +76,6 @@ void AlarmTimerTriggered(uint32_t tag)
 SmartControllerClass::SmartControllerClass()
 {
 	m_isRF = false;
-	m_isBLE = false;
 	m_isLAN = false;
 	m_isWAN = false;
 }
@@ -124,12 +125,8 @@ void SmartControllerClass::InitRadio()
   	}
   }
 
-	// Check BLE
-	CheckBLE();
-	if (IsBLEGood())
-	{
-		LOGN(LOGTAG_MSG, "BLE is working.");
-	}
+	// Open BLE Interface
+  theBLE.Init(PIN_BLE_STATE, PIN_BLE_EN);
 }
 
 // Third level initialization after loading configuration
@@ -417,13 +414,6 @@ BOOL SmartControllerClass::CheckNetwork()
 	return true;
 }
 
-BOOL SmartControllerClass::CheckBLE()
-{
-	// ToDo: change value of m_isBLE
-
-	return true;
-}
-
 BOOL SmartControllerClass::SelfCheck(US ms)
 {
 	static US tickSaveConfig = 0;				// must be static
@@ -527,7 +517,7 @@ BOOL SmartControllerClass::IsRFGood()
 
 BOOL SmartControllerClass::IsBLEGood()
 {
-	return m_isBLE;
+	return theBLE.isGood();
 }
 
 BOOL SmartControllerClass::IsLANGood()
@@ -555,8 +545,28 @@ void SmartControllerClass::ProcessCommands()
 	// Process ASR Command
 	theASR.processCommand();
 
-	// ToDo: process commands from other sources (Wifi, BLE)
+	// Process BLE commands
+  theBLE.processCommand();
+
+	// Process Cloud Commands
+	ProcessCloudCommands();
+
+	// ToDo: process commands from other sources (Wifi)
 	// ToDo: Potentially move ReadNewRules here
+}
+
+// Process Cloud Commands
+void SmartControllerClass::ProcessCloudCommands()
+{
+	String _cmd;
+	while( m_cmdList.size() ) {
+		_cmd = m_cmdList.shift();
+		ExeJSONCommand(_cmd);
+	}
+	while( m_configList.size() ) {
+		_cmd = m_configList.shift();
+		ExeJSONConfig(_cmd);
+	}
 }
 
 // Collect data from all enabled sensors
@@ -797,9 +807,9 @@ int SmartControllerClass::CldPowerSwitch(String swStr)
 
 // Execute Operations, including SerialConsole commands
 /// Format: {cmd: '', data: ''}
-int SmartControllerClass::CldJSONCommand(String jsonCmd)
+int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 {
-	SERIAL_LN("Received JSON cmd: %s", jsonCmd.c_str());
+	SERIAL_LN("Execute JSON cmd: %s", jsonCmd.c_str());
 
 	int rc = ProcessJSONString(jsonCmd);
 	if (rc < 0) {
@@ -844,10 +854,12 @@ int SmartControllerClass::CldJSONCommand(String jsonCmd)
 		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
 		const int state = (*m_jpCldCmd)["state"].as<int>();
 
-		char buf[64];
-		sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_STATUS, state);
-		String strCmd(buf);
-		ExecuteLightCommand(strCmd);
+		//char buf[64];
+		//sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_STATUS, state);
+		//String strCmd(buf);
+		//ExecuteLightCommand(strCmd);
+		String strCmd = String::format("%d:7:%d", node_id, state);
+		theRadio.ProcessSend(strCmd);
 	}
 
 	//COMMAND 2: Change light color
@@ -894,7 +906,7 @@ int SmartControllerClass::CldJSONCommand(String jsonCmd)
 		theRadio.ProcessSend(strCmd);
 	}
 
-	//COMMAND 4: Change color with scenerio input
+	//COMMAND 4: Change color with scenario input
 	if (_cmd == CMD_SCENARIO) {
 		if (!(*m_jpCldCmd).containsKey("node_id") || !(*m_jpCldCmd).containsKey("SNT_id")) {
 			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
@@ -924,13 +936,13 @@ int SmartControllerClass::CldJSONCommand(String jsonCmd)
 	return 1;
 }
 
-int SmartControllerClass::CldJSONConfig(String jsonData) //future actions
+int SmartControllerClass::ExeJSONConfig(String jsonData) //future actions
 {
   //based on the input (ie whether it is a rule, scenario, or schedule), send the json string(s) to appropriate function.
   //These functions are responsible for adding the item to the respective, appropriate Chain. If multiple json strings coming through,
   //handle each for each respective Chain until end of incoming string
 
-	SERIAL_LN("Received JSON config message: %s", jsonData.c_str());
+	SERIAL_LN("Execute JSON config message: %s", jsonData.c_str());
 
   int numRows = 0;
   bool bRowsKey = true;
@@ -1174,12 +1186,13 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 			}
 			break;
 		}
-		case CLS_LIGHT_STATUS:		// Device or Lamp Status
+		case CLS_LIGHT_STATUS:		// Node information
 		{
 			// Query Device Status and feedback through event
 			if( op_flag == GET ) {
 				// Note: here we use uid as node_id
-				QueryDeviceStatus(uidNum);
+				/// if node_id is 0, return node list
+				theConfig.lstNodes.showList(true, uidNum);
 			}
 			break;
 		}
@@ -1189,6 +1202,25 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 				if( data.containsKey("csc") ) {
 					// Change CSC
 					theConfig.SetCloudSerialEnabled(data["csc"] > 0);
+				} else if( data.containsKey("node_id") ) {
+					UC node_id = (UC)data["node_id"];
+					if( data.containsKey("new_id") ) {
+						UC new_id = (UC)data["new_id"];
+						String strCmd = String::format("%d:1:%d", node_id, new_id);
+						theRadio.ProcessSend(strCmd);
+						LOGN(LOGTAG_MSG, "Change nodeid:%d to %d", node_id, new_id);
+					} else if( data.containsKey("ncf") && data.containsKey("value") ) {
+						UC _config = (UC)data["ncf"];
+						US _value = (US)data["value"];
+						if( _config == NCF_DEV_ASSOCIATE ) {
+							theConfig.SetRemoteNodeDevice(node_id, _value);
+						} else {
+							theRadio.SendNodeConfig(node_id, _config, _value);
+						}
+						LOGN(LOGTAG_MSG, "Set nodeid:%d config %d to %d", node_id, _config, _value);
+					}
+				} else if( data.containsKey("asrcmd") && data.containsKey("SNT_id") ) {
+					theConfig.SetASR_SNT((UC)data["asrcmd"], (UC)data["SNT_id"]);
 				}
 			}
 			// ToDo: more config
@@ -1572,6 +1604,7 @@ bool SmartControllerClass::updateDevStatusRow(MyMessage msg)
 
 //This function takes in a MyMessage serial input, and sends it to the specified light.
 //Upon success, also updates the devstatus table and brightness indicator
+/*
 bool SmartControllerClass::ExecuteLightCommand(String mySerialStr)
 {
 	//TESTING SAMPLES
@@ -1589,20 +1622,24 @@ bool SmartControllerClass::ExecuteLightCommand(String mySerialStr)
 
 	//mysensors serial message
 	MyMessage msg;
-	if (theRadio.ProcessSend(mySerialStr, msg)) //send message
-	{
-		SERIAL_LN("Sent message: from:%d dest:%d cmd:%d type:%d sensor:%d payl-len:%d",
-			msg.getSender(), msg.getDestination(), msg.getCommand(),
-			msg.getType(), msg.getSensor(), msg.getLength());
-
-		if (updateDevStatusRow(msg)) //update devstatus;
+	MyParserSerial lv_SP;
+	if( lv_SP.parse(msg, mySerialStr.c_str()) ) {
+		if (theRadio.ProcessSend(msg)) //send message
 		{
-			//ToDo: update brightness indicator
-			return true;
+			SERIAL_LN("Sent message: from:%d dest:%d cmd:%d type:%d sensor:%d payl-len:%d",
+				msg.getSender(), msg.getDestination(), msg.getCommand(),
+				msg.getType(), msg.getSensor(), msg.getLength());
+
+			if (updateDevStatusRow(msg)) //update devstatus;
+			{
+				//ToDo: update brightness indicator
+				return true;
+			}
 		}
 	}
 	return false;
 }
+*/
 
 // Match sensor data to condition
 bool SmartControllerClass::Check_SensorData(UC _scope, UC _sr, UC _symbol, US _val1, US _val2)
@@ -2068,7 +2105,39 @@ BOOL SmartControllerClass::FindCurrentDevice()
 	return(m_pMainDev != NULL);
 }
 
-US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t _identity)
+ListNode<DevStatusRow_t> *SmartControllerClass::FindDevice(UC _nodeID)
+{
+	ListNode<DevStatusRow_t> *DevStatusRowPtr = NULL;
+	if( IS_CURRENT_DEVICE(_nodeID) ) {
+		DevStatusRowPtr = m_pMainDev;
+	} else {
+		DevStatusRowPtr = SearchDevStatus(_nodeID);
+	}
+	return DevStatusRowPtr;
+}
+
+UC SmartControllerClass::GetDevOnOff(UC _nodeID)
+{
+	//(m_pMainDev->data.ring[0].BR < BR_MIN_VALUE ? true : !m_pMainDev->data.ring[0].State);
+	return( thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF);
+}
+
+UC SmartControllerClass::GetDevBrightness(UC _nodeID)
+{
+	UC _br = (UC)thePanel.GetDimmerValue();
+//	ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
+//	if (DevStatusRowPtr) {
+//		_br = DevStatusRowPtr->data.ring[0].BR;
+//	}
+	return _br;
+}
+
+US SmartControllerClass::GetDevCCT(UC _nodeID)
+{
+	return (US)thePanel.GetCCTValue();
+}
+
+US SmartControllerClass::VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devType, uint64_t _identity)
 {
 	NodeIdRow_t lv_Node;
 	// Veirfy identity
@@ -2082,6 +2151,7 @@ US SmartControllerClass::VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t 
 	lv_Node.recentActive = Time.now();
 	theConfig.lstNodes.update(&lv_Node);
 	theConfig.SetNIDChanged(true);
+	*_assoDev = lv_Node.device;
 
 	US token = random(65535); // Random number
 	if( _nodeID < NODEID_MIN_REMOTE ) {
@@ -2173,19 +2243,22 @@ BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
 	if (DevStatusRowPtr == NULL)
 	{
 		LOGW(LOGTAG_MSG, "Failed to execte CMD_SCENARIO, wrong node_id %d", _nodeID);
-		return false;
 	}
 
 	// Find hue data of the 3 rings
+	BOOL _findIt;
 	ListNode<ScenarioRow_t> *rowptr = SearchScenario(_scenarioID);
 	if (rowptr)
 	{
+		_findIt = true;
 		String strCmd;
 		if( rowptr->data.sw != DEVICE_SW_DUMMY ) {
 			strCmd = String::format("%d:7:%d", _nodeID, rowptr->data.sw);
 			theRadio.ProcessSend(strCmd);
 		} else {
-			if( IS_SUNNY(DevStatusRowPtr->data.type) ) {
+			UC lv_type = devtypCRing3;
+			if( DevStatusRowPtr ) lv_type = DevStatusRowPtr->data.type;
+			if(IS_SUNNY(lv_type)) {
 				if( rowptr->data.ring[0].State == DEVICE_SW_OFF ) {
 					strCmd = String::format("%d:7:0", _nodeID);
 				} else {
@@ -2208,7 +2281,7 @@ BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
 						tmpMsg.set((void *)payl_buf, payl_len);
 						theRadio.ProcessSend(&tmpMsg);
 					}
-					if( IS_MIRAGE(DevStatusRowPtr->data.type) ) {
+					if( IS_MIRAGE(lv_type) ) {
 						// ToDo: construct mirage message
 						//tmpMsg.build(theRadio.getAddress(), _nodeID, NODEID_DUMMY, C_SET, V_DISTANCE, true);
 						//tmpMsg.set((void *)payl_buf, payl_len);
@@ -2222,10 +2295,16 @@ BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
 	}
 	else
 	{
-		LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenerio %d not found", _nodeID, _scenarioID);
-		return false;
+		_findIt = false;
+		LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenario %d not found", _nodeID, _scenarioID);
 	}
-	return true;
+
+	// Publish Device-Scenario-Change message
+	String strTemp = String::format("{'node_id':%d,'SNT_uid':%d,'found':%d}",
+			 _nodeID, _scenarioID, _findIt);
+	PublishDeviceStatus(strTemp.c_str());
+
+	return _findIt;
 }
 
 BOOL SmartControllerClass::RequestDeviceStatus(UC _nodeID)

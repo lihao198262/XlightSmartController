@@ -23,7 +23,6 @@ class SmartControllerClass : public CloudObjClass
 {
 private:
   BOOL m_isRF;
-  BOOL m_isBLE;
   BOOL m_isLAN;
   BOOL m_isWAN;
 
@@ -48,7 +47,6 @@ public:
   BOOL CheckRF();
   BOOL CheckWiFi();
   BOOL CheckNetwork();
-  BOOL CheckBLE();
   BOOL SelfCheck(US ms);
   BOOL CheckRFBaseNetEnableDur();
   BOOL IsRFGood();
@@ -61,8 +59,9 @@ public:
 
   // Process all kinds of commands
   void ProcessCommands();
+  void ProcessCloudCommands();
   void CollectData(UC tick);
-  bool ExecuteLightCommand(String mySerialStr);
+  //bool ExecuteLightCommand(String mySerialStr);
   bool ProcessPanel();
 
   // Device Control Functions
@@ -74,9 +73,9 @@ public:
   // Cloud interface implementation
   int CldSetTimeZone(String tzStr);
   int CldPowerSwitch(String swStr);
-  int CldJSONCommand(String jsonCmd);
-  int CldJSONConfig(String jsonData);
   int CldSetCurrentTime(String tmStr = "");
+  int ExeJSONCommand(String jsonCmd);
+  int ExeJSONConfig(String jsonData);
 
   // Parsing Functions
   bool ParseCmdRow(JsonObject& data);
@@ -118,7 +117,13 @@ public:
 
   // Device Operations, will be moved to dedicate class later
   BOOL FindCurrentDevice();
-  US VerifyDevicePresence(UC _nodeID, UC _devType, uint64_t _identity);
+  ListNode<DevStatusRow_t> *FindDevice(UC _nodeID);
+
+  UC GetDevOnOff(UC _nodeID);
+  UC GetDevBrightness(UC _nodeID);
+  US GetDevCCT(UC _nodeID);
+
+  US VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devType, uint64_t _identity);
   BOOL ToggleLampOnOff(UC _nodeID = NODEID_MAINDEVICE);
   BOOL ChangeLampBrightness(UC _nodeID = NODEID_MAINDEVICE, UC _percentage = 50);
   BOOL ChangeLampCCT(UC _nodeID = NODEID_MAINDEVICE, US _cct = 3000);

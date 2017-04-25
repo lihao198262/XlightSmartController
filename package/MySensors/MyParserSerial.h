@@ -29,4 +29,5 @@ public:
 	bool parse(MyMessage &message, char *inputString);
 	char* getSerialString(MyMessage &message, char *buffer) const;
 };
+extern MyParserSerial serialMsgParser;
 #endif

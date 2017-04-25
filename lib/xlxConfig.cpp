@@ -37,9 +37,11 @@
 #include "xliPinMap.h"
 #include "xlxLogger.h"
 #include "xliMemoryMap.h"
+#include "xliNodeConfig.h"
 #include "xlxPanel.h"
 #include "xlxRF24Server.h"
 #include "xlSmartController.h"
+#include "xlxBLEInterface.h"
 
 using namespace Flashee;
 
@@ -73,6 +75,7 @@ bool NodeListClass::loadList()
 			if( lv_Node.nid != NODEID_MAINDEVICE ) {
 				lv_Node.nid = NODEID_MAINDEVICE;
 				resetIdentity(lv_Node.identity);
+				lv_Node.device = 0;
 				lv_Node.recentActive = 0;
 				m_isChanged = true;
 			}
@@ -80,6 +83,7 @@ bool NodeListClass::loadList()
 			if( lv_Node.nid != NODEID_MIN_REMOTE ) {
 				lv_Node.nid = NODEID_MIN_REMOTE;
 				resetIdentity(lv_Node.identity);
+				lv_Node.device = NODEID_MAINDEVICE;
 				lv_Node.recentActive = 0;
 				m_isChanged = true;
 			}
@@ -112,51 +116,99 @@ bool NodeListClass::saveList()
 	return true;
 }
 
-void NodeListClass::showList()
+void NodeListClass::publishNode(NodeIdRow_t _node)
 {
+	String strTemp;
 	char strDisplay[64];
+
 	UL lv_now = Time.now();
-	for(int i=0; i < _count; i++) {
-		SERIAL_LN("%cNo.%d - NodeID: %d (%s) actived %ds ago",
-				_pItems[i].nid == CURRENT_DEVICE ? '*' : ' ', i,
-		    _pItems[i].nid, PrintMacAddress(strDisplay, _pItems[i].identity),
-				(_pItems[i].recentActive > 0 ? lv_now - _pItems[i].recentActive : -1));
+	strTemp = String::format("{'node_id':%d,'mac':'%s','device':%d,'recent':%d}", _node.nid,
+			PrintMacAddress(strDisplay, _node.identity), _node.device,
+			(_node.recentActive > 0 ? lv_now - _node.recentActive : -1));
+	theSys.PublishDeviceConfig(strTemp.c_str());
+}
+
+void NodeListClass::showList(BOOL toCloud, UC nid)
+{
+	String strTemp;
+	char strDisplay[64];
+
+	if( nid > 0 ) {
+		if( toCloud ) {
+			// Specific node info
+			NodeIdRow_t lv_Node;
+			lv_Node.nid = nid;
+			if( get(&lv_Node) >= 0 ) {
+				publishNode(lv_Node);
+			}
+		}
+	} else {
+		UL lv_now = Time.now();
+		// Node list
+		if( toCloud ) {
+			strTemp = String::format("{'nlist':%d,'nids':[%d", _count, _pItems[0].nid);
+		}
+		for(int i=0; i < _count; i++) {
+			if( toCloud ) {
+				if( i > 0 ) {
+					sprintf(strDisplay, ",%d", _pItems[i].nid);
+					strTemp = strTemp + strDisplay;
+				}
+			} else {
+				SERIAL_LN("%cNo.%d - NodeID: %d (%s) actived %ds ago associated device: %d",
+						_pItems[i].nid == CURRENT_DEVICE ? '*' : ' ', i,
+				    _pItems[i].nid, PrintMacAddress(strDisplay, _pItems[i].identity),
+						(_pItems[i].recentActive > 0 ? lv_now - _pItems[i].recentActive : -1),
+					  _pItems[i].device);
+			}
+		}
+	}
+
+	if( toCloud ) {
+		strTemp = strTemp + "]}";
+		theSys.PublishDeviceConfig(strTemp.c_str());
 	}
 }
 
 // Get a new NodeID
-UC NodeListClass::requestNodeID(char type, uint64_t identity)
+UC NodeListClass::requestNodeID(UC preferID, char type, uint64_t identity)
 {
 	// Must provide identity
 	if( identity == 0 ) return 0;
 
 	UC nodeID = 0;		// error
-	switch( type ) {
-	case NODE_TYP_LAMP:
-		// 1, 8 - 63
-		/// Check Main DeviceID
-		nodeID = getAvailableNodeId(NODEID_MAINDEVICE, NODEID_MIN_DEVCIE, NODEID_MAX_DEVCIE, identity);
-		break;
+	if( IS_GROUP_NODEID(preferID) ) {
+		nodeID = preferID;
+	} else {
+		switch( type ) {
+		case NODE_TYP_LAMP:
+			// 1, 8 - 63
+			/// Check Main DeviceID
+			nodeID = getAvailableNodeId(IS_NOT_DEVICE_NODEID(preferID) ? NODEID_DUMMY : preferID,
+			 					NODEID_MAINDEVICE, NODEID_MIN_DEVCIE, NODEID_MAX_DEVCIE, identity);
+			break;
 
-	case NODE_TYP_REMOTE:
-		// 64 - 127
-		nodeID = getAvailableNodeId(NODEID_MIN_REMOTE, NODEID_MIN_REMOTE+1, NODEID_MAX_REMOTE, identity);
-		break;
+		case NODE_TYP_REMOTE:
+			// 64 - 127
+			nodeID = getAvailableNodeId(IS_NOT_REMOTE_NODEID(preferID) ? NODEID_DUMMY : preferID,
+								NODEID_MIN_REMOTE, NODEID_MIN_REMOTE+1, NODEID_MAX_REMOTE, identity);
+			break;
 
-	case NODE_TYP_THIRDPARTY:
-		// ToDo: support thirdparty device in the future
-		break;
+		case NODE_TYP_THIRDPARTY:
+			// ToDo: support thirdparty device in the future
+			break;
 
-	default:
-		break;
+		default:
+			break;
+		}
 	}
 
 	// Add or Update
 	if( nodeID > 0 ) {
-		NodeIdRow_t lv_Node;
 		lv_Node.nid = nodeID;
 		copyIdentity(lv_Node.identity, &identity);
 		lv_Node.recentActive = Time.now();
+		lv_Node.device = 0;
 		UC oldCnt = count();
 		add(&lv_Node);
 		if( count() > oldCnt && nodeID <= NODEID_MAX_DEVCIE ) {
@@ -173,32 +225,52 @@ UC NodeListClass::requestNodeID(char type, uint64_t identity)
 				SERIAL_LN("Test DevStatus_table added item: %d, size: %d", nodeID, theSys.DevStatus_table.size());
 			}
 		}
+
+		publishNode(lv_Node);
 	}
 	return nodeID;
 }
 
-UC NodeListClass::getAvailableNodeId(UC defaultID, UC minID, UC maxID, uint64_t identity)
+UC NodeListClass::getAvailableNodeId(UC preferID, UC defaultID, UC minID, UC maxID, uint64_t identity)
 {
-	UC oldestNode;
-	UL oldestTime;
+	UC oldestNode = 0;
+	UL oldestTime = Time.now();
+	BOOL bFound = false;
 	NodeIdRow_t lv_Node;
-	if( defaultID > 0 ) {
-		lv_Node.nid = defaultID;
-		if( get(&lv_Node) < 0 ) {
-			return 0;
-		} else if( lv_Node.recentActive == 0 || isIdentityEmpty(lv_Node.identity) || isIdentityEqual(lv_Node.identity, &identity) ) {
-			// DefaultID is available
-			return defaultID;
+
+	// Stage 1: Check preferID
+	if( preferID > 0 && preferID < NODEID_DUMMY ) {
+		lv_Node.nid = preferID;
+		if( get(&lv_Node) >= 0 ) {
+			bFound = true;
+			// preferID is found and matched, reuse it
+			if( lv_Node.recentActive == 0 || isIdentityEmpty(lv_Node.identity) || isIdentityEqual(lv_Node.identity, &identity) ) {
+				return preferID;
+			} else {
+				// Otherwise, avoid use it
+				if( theConfig.IsFixedNID() ) return 0;
+			}
 		} else {
-			oldestNode = defaultID;
-			oldestTime = lv_Node.recentActive;
+			// Not found, means ID available
+			return(theConfig.IsFixedNID() ? 0 : preferID);
 		}
-	} else {
-		oldestNode = 0;
-		oldestTime = Time.now();
 	}
 
-	// Stage 1: Check Identity and reuse if possible
+	// Stage 2: Check DefaultID
+	if( defaultID > 0 ) {
+		lv_Node.nid = defaultID;
+		if( get(&lv_Node) >= 0 ) {
+			if( lv_Node.recentActive == 0 || isIdentityEmpty(lv_Node.identity) || isIdentityEqual(lv_Node.identity, &identity) ) {
+				// DefaultID is available
+				return defaultID;
+			} else {
+				oldestNode = defaultID;
+				oldestTime = lv_Node.recentActive;
+			}
+		}
+	}
+
+	// Stage 3: Check Identity and reuse if possible
 	for(int i = 0; i < count(); i++) {
 		if( _pItems[i].nid > maxID ) break;
 		if( _pItems[i].nid < minID ) continue;
@@ -213,14 +285,14 @@ UC NodeListClass::getAvailableNodeId(UC defaultID, UC minID, UC maxID, uint64_t 
 		}
 	}
 
-	// Stage 2: Otherwise, get a unused NodeID from corresponding segment
+	// Stage 4: Otherwise, get a unused NodeID from corresponding segment
 	for( UC nodeID = minID; nodeID <= maxID; nodeID++ ) {
 		lv_Node.nid = nodeID;
 		// Seek unused NodeID
 		if( get(&lv_Node) < 0 ) return nodeID;
 	}
 
-	// Stage 3: Otherwise, overwrite the longest inactive entry within the segment
+	// Stage 5: Otherwise, overwrite the longest inactive entry within the segment
 	return oldestNode;
 }
 
@@ -233,6 +305,7 @@ BOOL NodeListClass::clearNodeId(UC nodeID)
 		// Update with black item
 		lv_Node.nid = nodeID;
 		resetIdentity(lv_Node.identity);
+		lv_Node.device = 0;
 		lv_Node.recentActive = 0;
 		update(&lv_Node);
 	} else if ( nodeID < NODEID_MIN_DEVCIE ) {
@@ -284,6 +357,9 @@ void ConfigClass::InitConfig()
   strcpy(m_config.Organization, XLA_ORGANIZATION);
   strcpy(m_config.ProductName, XLA_PRODUCT_NAME);
   strcpy(m_config.Token, XLA_TOKEN);
+	strcpy(m_config.bleName, XLIGHT_BLE_SSID);
+	strcpy(m_config.blePin, XLIGHT_BLE_PIN);
+	strcpy(m_config.pptAccessCode, XLIGHT_BLE_PIN);
   m_config.indBrightness = 0;
 	m_config.mainDevID = NODEID_MAINDEVICE;
   m_config.typeMainDevice = (UC)devtypWRing3;
@@ -291,11 +367,13 @@ void ConfigClass::InitConfig()
   m_config.numNodes = 2;	// One main device( the smart lamp) and one remote control
   m_config.enableCloudSerialCmd = false;
 	m_config.enableSpeaker = false;
+	m_config.fixedNID = true;
 	m_config.enableDailyTimeSync = true;
 	m_config.rfPowerLevel = RF24_PA_LEVEL_GW;
 	m_config.maxBaseNetworkDuration = MAX_BASE_NETWORK_DUR;
 	m_config.useCloud = CLOUD_ENABLE;
 	m_config.stWiFi = 1;
+	memset(m_config.asrSNT, 0x00, MAX_ASR_SNT_ITEMS);
 }
 
 BOOL ConfigClass::InitDevStatus(UC nodeID)
@@ -374,6 +452,7 @@ BOOL ConfigClass::LoadConfig()
     }
     else
     {
+			m_config.version = VERSION_CONFIG_DATA;
       LOGI(LOGTAG_MSG, "Sysconfig loaded.");
     }
     m_isLoaded = true;
@@ -623,7 +702,52 @@ void ConfigClass::SetToken(const char *strName)
   m_isChanged = true;
 }
 
-BOOL ConfigClass::ConfigClass::IsCloudSerialEnabled()
+String ConfigClass::GetBLEName()
+{
+	String strName = m_config.bleName;
+  return strName;
+}
+
+void ConfigClass::SetBLEName(const char *strName)
+{
+	if( theBLE.setName(strName) ) {
+		strncpy(m_config.bleName, strName, sizeof(m_config.bleName) - 1);
+	  m_isChanged = true;
+	}
+}
+
+String ConfigClass::GetBLEPin()
+{
+	String strName = m_config.blePin;
+  return strName;
+}
+
+void ConfigClass::SetBLEPin(const char *strPin)
+{
+	if( theBLE.setPin(strPin) ) {
+		strncpy(m_config.blePin, strPin, sizeof(m_config.blePin) - 1);
+	  m_isChanged = true;
+	}
+}
+
+String ConfigClass::GetPPTAccessCode()
+{
+	String strName = m_config.pptAccessCode;
+  return strName;
+}
+
+void ConfigClass::SetPPTAccessCode(const char *strPin)
+{
+	strncpy(m_config.pptAccessCode, strPin, sizeof(m_config.pptAccessCode) - 1);
+  m_isChanged = true;
+}
+
+BOOL ConfigClass::CheckPPTAccessCode(const char *strPin)
+{
+		return(strcmp(m_config.pptAccessCode, strPin)==0);
+}
+
+BOOL ConfigClass::IsCloudSerialEnabled()
 {
 	return m_config.enableCloudSerialCmd;
 }
@@ -636,7 +760,7 @@ void ConfigClass::SetCloudSerialEnabled(BOOL sw)
 	}
 }
 
-BOOL ConfigClass::ConfigClass::IsSpeakerEnabled()
+BOOL ConfigClass::IsSpeakerEnabled()
 {
 	return m_config.enableSpeaker;
 }
@@ -649,7 +773,20 @@ void ConfigClass::SetSpeakerEnabled(BOOL sw)
 	}
 }
 
-BOOL ConfigClass::ConfigClass::IsDailyTimeSyncEnabled()
+BOOL ConfigClass::IsFixedNID()
+{
+	return m_config.fixedNID;
+}
+
+void ConfigClass::SetFixedNID(BOOL sw)
+{
+	if( sw != m_config.fixedNID ) {
+		m_config.fixedNID = sw;
+		m_isChanged = true;
+	}
+}
+
+BOOL ConfigClass::IsDailyTimeSyncEnabled()
 {
 	return m_config.enableDailyTimeSync;
 }
@@ -769,6 +906,39 @@ BOOL ConfigClass::SetMainDeviceType(UC type)
   return false;
 }
 
+UC ConfigClass::GetRemoteNodeDevice(UC remoteID)
+{
+	NodeIdRow_t lv_Node;
+	if( remoteID > 0 ) {
+		lv_Node.nid = remoteID;
+		if( lstNodes.get(&lv_Node) >= 0 ) {
+			return lv_Node.device;
+		}
+	}
+
+	return 0;
+}
+
+// Change controlled device of specific remote
+BOOL ConfigClass::SetRemoteNodeDevice(UC remoteID, US devID)
+{
+	NodeIdRow_t lv_Node;
+	if( remoteID > 0 ) {
+		lv_Node.nid = remoteID;
+		if( lstNodes.get(&lv_Node) >= 0 ) {
+			if( lv_Node.device != devID ) {
+				lv_Node.device = devID;
+				lstNodes.update(&lv_Node);
+				lstNodes.m_isChanged = true;
+
+				// Notify Remote Node
+				return theRadio.SendNodeConfig(remoteID, NCF_DEV_ASSOCIATE, devID);
+			}
+		}
+	}
+
+	return false;
+}
 
 UC ConfigClass::GetNumDevices()
 {
@@ -869,6 +1039,36 @@ BOOL ConfigClass::SetRFPowerLevel(UC level)
 		return true;
 	}
 	return false;
+}
+
+UC ConfigClass::GetASR_SNT(const UC _code)
+{
+	if( _code > 0 && _code <= MAX_ASR_SNT_ITEMS ) {
+		return m_config.asrSNT[_code - 1];
+	}
+	return 0;
+}
+
+BOOL ConfigClass::SetASR_SNT(const UC _code, const UC _snt)
+{
+	if( _code > 0 && _code <= MAX_ASR_SNT_ITEMS ) {
+		if( m_config.asrSNT[_code - 1] !=  _snt ) {
+			m_config.asrSNT[_code - 1] =  _snt;
+			m_isChanged = true;
+			return true;
+		}
+	}
+	return false;
+}
+
+void ConfigClass::showASRSNT()
+{
+	SERIAL_LN("\n\r**ASR SNT**");
+	for( UC _code = 0; _code < MAX_ASR_SNT_ITEMS; _code++ ) {
+		if( m_config.asrSNT[_code] > 0 && m_config.asrSNT[_code] < 255 ) {
+			SERIAL_LN("Cmd: 0x%2x - Scenario: %d", _code+1, m_config.asrSNT[_code]);
+		}
+	}
 }
 
 // Load Device Status

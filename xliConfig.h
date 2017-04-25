@@ -25,6 +25,9 @@
   #define IF_MAINLOOP_TIMER(x, name) ({x;})
 #endif
 
+// Change it only if Config_t structure is updated
+#define VERSION_CONFIG_DATA       8
+
 // Xlight Application Identification
 #define XLA_ORGANIZATION          "xlight.ca"               // Default value. Read from EEPROM
 #define XLA_PRODUCT_NAME          "XController"             // Default value. Read from EEPROM
@@ -55,9 +58,6 @@
 // Maximum number of rows for any working memory table implimented using ChainClass
 #define MAX_TABLE_SIZE              8
 
-// Change it only if Config_t structure is updated
-#define VERSION_CONFIG_DATA         1
-
 // Maximum number of device associated to one controller
 #define MAX_DEVICE_PER_CONTROLLER   16
 
@@ -77,6 +77,9 @@
 // Maximum RF messages buffered
 #define MQ_MAX_RF_MSG           5
 
+// Maximum Cloud Command messages buffered
+#define MQ_MAX_CLOUD_MSG        6
+
 // NodeID Convention
 #define NODEID_GATEWAY          0
 #define NODEID_MAINDEVICE       1
@@ -86,6 +89,8 @@
 #define NODEID_MAX_REMOTE       127
 #define NODEID_PROJECTOR        128
 #define NODEID_SMARTPHONE       139
+#define NODEID_MIN_GROUP        192
+#define NODEID_MAX_GROUP        223
 #define NODEID_DUMMY            255
 
 #define BR_MIN_VALUE            1

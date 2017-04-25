@@ -21,6 +21,8 @@
 #include "MyParserSerial.h"
 #include "MyTransport.h"
 
+MyParserSerial serialMsgParser;
+
 MyParserSerial::MyParserSerial() : MyParser() {}
 
 bool MyParserSerial::parse(MyMessage &message, char *inputString) {
@@ -80,8 +82,13 @@ bool MyParserSerial::parse(MyMessage &message, char *inputString) {
 
 	message.setSender( GATEWAY_ADDRESS );
 	message.setLast( GATEWAY_ADDRESS );
-  mSetRequestAck(message.msg, ack?1:0);
-  mSetAck(message.msg, false);
+	if( ack == 2 ) {
+		mSetAck(message.msg, true);
+		mSetRequestAck(message.msg, false);
+	} else {
+		mSetAck(message.msg, false);
+  	mSetRequestAck(message.msg, ack?1:0);
+	}
 	if (command == C_STREAM)
 		message.set(bvalue, blen);
 	else

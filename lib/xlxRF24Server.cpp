@@ -38,18 +38,27 @@
 
 #include "xlxRF24Server.h"
 #include "xliPinMap.h"
+#include "xliNodeConfig.h"
 #include "xlSmartController.h"
 #include "xlxLogger.h"
 #include "xlxPanel.h"
+#include "xlxBLEInterface.h"
 
 #include "MyParserSerial.h"
+
+#define BROADCAST_REPEAT
 
 //------------------------------------------------------------------
 // the one and only instance of RF24ServerClass
 RF24ServerClass theRadio(PIN_RF24_CE, PIN_RF24_CS);
 MyMessage msg;
-MyParserSerial msgParser;
 UC *msgData = (UC *)&(msg.msg);
+
+#ifdef BROADCAST_REPEAT
+MyMessage msg_rpt;
+UL tickMsgRpt = 0;
+UC timesMsgRpt = 0;
+#endif
 
 RF24ServerClass::RF24ServerClass(uint8_t ce, uint8_t cs, uint8_t paLevel)
 	:	MyTransportNRF24(ce, cs, paLevel)
@@ -120,6 +129,7 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 	float fValue;
 	char strBuffer[64];
 	uint8_t payload[MAX_PAYLOAD];
+	MyMessage lv_msg;
 
 	int nPos = strMsg.indexOf(':');
 	int nPos2;
@@ -150,7 +160,7 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 		strncpy(strBuffer, strMsg.c_str(), iValue);
 		strBuffer[iValue] = 0;
 		// Serail format to MySensors message structure
-		bMsgReady = msgParser.parse(msg, strBuffer);
+		bMsgReady = serialMsgParser.parse(lv_msg, strBuffer);
 		if (bMsgReady) {
 			SERIAL("Now sending message...");
 		}
@@ -158,108 +168,127 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 
 	case 1:   // Request new node ID
 		if (getAddress() == GATEWAY_ADDRESS) {
-			SERIAL_LN("Controller can not request node ID\n\r");
+			if( lv_nNodeID == GATEWAY_ADDRESS ) {
+				SERIAL_LN("Controller can not request node ID\n\r");
+			} else {
+				// Set specific NodeID to node
+				UC newID = lv_nNodeID;
+				if( lv_sPayload.length() > 0 ) {
+					newID = (UC)lv_sPayload.toInt();
+				}
+				if( newID > 0 ) {
+					lv_msg.build(getAddress(), lv_nNodeID, newID, C_INTERNAL, I_ID_RESPONSE, false, true);
+					lv_msg.set(getMyNetworkID());
+					bMsgReady = true;
+					//theConfig.lstNodes.clearNodeId(lv_nNodeID);
+					SERIAL("Now sending new id:%d to node:%d...", newID, lv_nNodeID);
+				}
+			}
 		}
 		else {
 			UC deviceType = (getAddress() == 3 ? NODE_TYP_REMOTE : NODE_TYP_LAMP);
 			ChangeNodeID(AUTO);
-			msg.build(AUTO, BASESERVICE_ADDRESS, deviceType, C_INTERNAL, I_ID_REQUEST, false);
-			msg.set(GetNetworkID(true));		// identity: could be MAC, serial id, etc
+			lv_msg.build(AUTO, BASESERVICE_ADDRESS, deviceType, C_INTERNAL, I_ID_REQUEST, false);
+			lv_msg.set(GetNetworkID(true));		// identity: could be MAC, serial id, etc
 			bMsgReady = true;
 			SERIAL("Now sending request node id message...");
 		}
 		break;
 
-	case 2:   // Lamp present, req ack
+	case 2:   // Node Config
 		{
-			UC lampType = (UC)devtypWRing3;
-			msg.build(getAddress(), lv_nNodeID, lampType, C_PRESENTATION, S_LIGHT, true);
-			msg.set(GetNetworkID(true));
-			bMsgReady = true;
-			SERIAL("Now sending lamp present message...");
+			nPos = lv_sPayload.indexOf(':');
+			if (nPos > 0) {
+				bytValue = (uint8_t)(lv_sPayload.substring(0, nPos).toInt());
+				iValue = lv_sPayload.substring(nPos + 1).toInt();
+				lv_msg.build(getAddress(), lv_nNodeID, bytValue, C_INTERNAL, I_CONFIG, true);
+				lv_msg.set((unsigned int)iValue);
+				bMsgReady = true;
+				SERIAL("Now sending node:%d config:%d value:%d...", lv_nNodeID, bytValue, iValue);
+			}
 		}
 		break;
 
 	case 3:   // Temperature sensor present with sensor id 1, req no ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_PRESENTATION, S_TEMP, false);
-		msg.set("");
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_PRESENTATION, S_TEMP, false);
+		lv_msg.set("");
 		bMsgReady = true;
 		SERIAL("Now sending DHT11 present message...");
 		break;
 
 	case 4:   // Temperature set to 23.5, req no ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_TEMP, false);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_TEMP, false);
 		fValue = 23.5;
 		if( lv_sPayload.length() > 0 ) {
 			fValue = lv_sPayload.toFloat();
 		}
-		msg.set(fValue, 2);
+		lv_msg.set(fValue, 2);
 		bMsgReady = true;
 		SERIAL("Now sending set temperature message...");
 		break;
 
 	case 5:   // Humidity set to 45, req no ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_HUM, false);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_HUM, false);
 		iValue = 45;
 		if( lv_sPayload.length() > 0 ) {
 			iValue = lv_sPayload.toInt();
 		}
-		msg.set(iValue);
+		lv_msg.set(iValue);
 		bMsgReady = true;
 		SERIAL("Now sending set humidity message...");
 		break;
 
 	case 6:   // Get main lamp(ID:1) power(V_STATUS:2) on/off, ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_STATUS, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_STATUS, true);
 		bMsgReady = true;
 		SERIAL("Now sending get V_STATUS message...");
 		break;
 
 	case 7:   // Set main lamp(ID:1) power(V_STATUS:2) on/off, ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_STATUS, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_STATUS, true);
 		bytValue = constrain(lv_sPayload.toInt(), DEVICE_SW_OFF, DEVICE_SW_TOGGLE);
-		msg.set(bytValue);
+		lv_msg.set(bytValue);
 		bMsgReady = true;
 		SERIAL("Now sending set V_STATUS %s message...", (bytValue ? "on" : "off"));
 		break;
 
 	case 8:   // Get main lamp(ID:1) dimmer (V_PERCENTAGE:3), ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_PERCENTAGE, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_PERCENTAGE, true);
 		bMsgReady = true;
 		SERIAL("Now sending get V_PERCENTAGE message...");
 		break;
 
 	case 9:   // Set main lamp(ID:1) dimmer (V_PERCENTAGE:3), ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_PERCENTAGE, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_PERCENTAGE, true);
 		bytValue = constrain(lv_sPayload.toInt(), 0, 100);
-		msg.set((uint8_t)OPERATOR_SET, bytValue);
+		lv_msg.set((uint8_t)OPERATOR_SET, bytValue);
 		bMsgReady = true;
 		SERIAL("Now sending set V_PERCENTAGE:%d message...", bytValue);
 		break;
 
 	case 10:  // Get main lamp(ID:1) color temperature (V_LEVEL), ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_LEVEL, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_LEVEL, true);
 		bMsgReady = true;
 		SERIAL("Now sending get CCT V_LEVEL message...");
 		break;
 
 	case 11:  // Set main lamp(ID:1) color temperature (V_LEVEL), ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_LEVEL, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_LEVEL, true);
 		iValue = constrain(lv_sPayload.toInt(), CT_MIN_VALUE, CT_MAX_VALUE);
-		msg.set((uint8_t)OPERATOR_SET, (unsigned int)iValue);
+		lv_msg.set((uint8_t)OPERATOR_SET, (unsigned int)iValue);
 		bMsgReady = true;
 		SERIAL("Now sending set CCT V_LEVEL %d message...", iValue);
 		break;
 
 	case 12:  // Request lamp status in one
-		msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_RGBW, true);
-		msg.set((uint8_t)RING_ID_ALL);		// RING_ID_1 is also workable currently
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_REQ, V_RGBW, true);
+		lv_msg.set((uint8_t)RING_ID_ALL);		// RING_ID_1 is also workable currently
 		bMsgReady = true;
 		SERIAL("Now sending get dev-status (V_RGBW) message...");
 		break;
 
 	case 13:  // Set main lamp(ID:1) status in one, ack
-		msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_RGBW, true);
+		lv_msg.build(getAddress(), lv_nNodeID, 1, C_SET, V_RGBW, true);
 		payload[0] = RING_ID_ALL;
 		payload[1] = 1;
 		payload[2] = 65;
@@ -286,7 +315,7 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 					bytValue = (uint8_t)(lv_sPayload.substring(0, nPos).toInt());
 					payload[cindex] = bytValue;
 				}
-				msg.set((void*)payload, 7);
+				lv_msg.set((void*)payload, 7);
 				SERIAL("Now sending set BR=%d WRGB=(%d,%d,%d,%d)...",
 						payload[2], payload[3], payload[4], payload[5], payload[6]);
 			} else {
@@ -294,14 +323,14 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 				iValue = constrain(iValue, CT_MIN_VALUE, CT_MAX_VALUE);
 				payload[3] = iValue % 256;
 			  payload[4] = iValue / 256;
-				msg.set((void*)payload, 5);
+				lv_msg.set((void*)payload, 5);
 				SERIAL("Now sending set BR=%d CCT=%d...", bytValue, iValue);
 			}
 		} else {
 			iValue = 3000;
 			payload[3] = iValue % 256;
 		  payload[4] = iValue / 256;
-			msg.set((void*)payload, 5);
+			lv_msg.set((void*)payload, 5);
 			SERIAL("Now sending set BR=%d CCT=%d...", bytValue, iValue);
 		}
 		bMsgReady = true;
@@ -317,9 +346,9 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg)
 	}
 
 	if (bMsgReady) {
-		SERIAL("to %d...", msg.getDestination());
-		sentOK = ProcessSend();
-		my_msg = msg;
+		SERIAL("to %d...", lv_msg.getDestination());
+		sentOK = ProcessSend(&lv_msg);
+		my_msg = lv_msg;
 		SERIAL_LN(sentOK ? "OK" : "failed");
 	}
 
@@ -337,6 +366,12 @@ bool RF24ServerClass::ProcessSend(MyMessage *pMsg)
 {
 	if( !pMsg ) { pMsg = &msg; }
 
+#ifdef BROADCAST_REPEAT
+	if( pMsg->getDestination() == BROADCAST_ADDRESS ) {
+		SetRepeatBCastMsg(pMsg);
+	}
+#endif
+
 	// Determine the receiver addresse
 	_times++;
 	if( send(pMsg->getDestination(), *pMsg) )
@@ -348,8 +383,83 @@ bool RF24ServerClass::ProcessSend(MyMessage *pMsg)
 	return false;
 }
 
+void RF24ServerClass::SetRepeatBCastMsg(MyMessage *pMsg)
+{
+#ifdef BROADCAST_REPEAT
+	msg_rpt = *pMsg;
+	// Note: change relative value to absolute value
+	if( msg_rpt.getCommand() == C_SET ) {
+		uint8_t *payload = (uint8_t *)msg_rpt.getCustom();
+		uint8_t bytValue = payload[0];
+		if( msg_rpt.getType() == V_STATUS && bytValue == DEVICE_SW_TOGGLE ) {
+			bytValue = 1 - theSys.GetDevOnOff(CURRENT_DEVICE);
+			msg_rpt.set(bytValue);
+		} else if( msg_rpt.getType() == V_PERCENTAGE && msg_rpt.getLength() == 2 ) {
+			if( bytValue != OPERATOR_SET ) {
+				payload[0] = OPERATOR_SET;
+				if( bytValue == OPERATOR_ADD ) {
+					payload[1] += theSys.GetDevBrightness(CURRENT_DEVICE);
+					if( payload[1] > 100 ) payload[1] = 100;
+				} else if( bytValue == OPERATOR_SUB ) {
+					if( theSys.GetDevBrightness(CURRENT_DEVICE) > payload[1] + BR_MIN_VALUE ) {
+						payload[1] = theSys.GetDevBrightness(CURRENT_DEVICE) - payload[1];
+					} else {
+						payload[1] = BR_MIN_VALUE;
+					}
+				}
+			}
+		} else if( msg_rpt.getType() == V_LEVEL && msg_rpt.getLength() == 3 ) {
+			if( bytValue != OPERATOR_SET ) {
+				uint16_t _CCTValue = theSys.GetDevCCT(CURRENT_DEVICE);
+				uint16_t _deltaValue = payload[2] * 256 + payload[1];
+				payload[0] = OPERATOR_SET;
+				if( bytValue == OPERATOR_ADD ) {
+					_CCTValue += _deltaValue;
+					if( _CCTValue > CT_MAX_VALUE ) _CCTValue = CT_MAX_VALUE;
+				} else if( bytValue == OPERATOR_SUB ) {
+					if( _CCTValue > _deltaValue + CT_MIN_VALUE ) {
+						_CCTValue -= _deltaValue;
+					} else {
+						_CCTValue = CT_MIN_VALUE;
+					}
+				}
+				payload[1] = _CCTValue % 256;
+				payload[2] = _CCTValue / 256;
+			}
+		}
+	}
+	tickMsgRpt = millis();
+	timesMsgRpt = 0;
+#endif
+}
+
+bool RF24ServerClass::SendNodeConfig(UC _node, UC _ncf, unsigned int _value)
+{
+	// Notify Remote Node
+	MyMessage lv_msg;
+	lv_msg.build(NODEID_GATEWAY, _node, _ncf, C_INTERNAL, I_CONFIG, true);
+	lv_msg.set(_value);
+	return ProcessSend(&lv_msg);
+}
+
 bool RF24ServerClass::PeekMessage()
 {
+#ifdef BROADCAST_REPEAT
+	// Repeatly send
+	if( tickMsgRpt > 0 ) {
+			if( millis() - tickMsgRpt > 150 ) {
+				if( ++timesMsgRpt > 3 ) {
+						tickMsgRpt = 0;
+				} else {
+					send(msg_rpt.getDestination(), msg_rpt);
+					tickMsgRpt = millis();
+					// ToDo: Test
+					SERIAL_LN("Test Repeat BCast Message: %d, times:%d", msg_rpt.getCommand(), timesMsgRpt);
+				}
+			}
+	}
+#endif
+
 	if( !isValid() ) return false;
 
 	UC to = 0;
@@ -418,12 +528,12 @@ bool RF24ServerClass::ProcessReceive()
 	  switch( msg.getCommand() )
 	  {
 	    case C_INTERNAL:
-	      if( msgType == I_ID_REQUEST && (replyTo == AUTO || replyTo == BASESERVICE_ADDRESS) ) {
+	      if( msgType == I_ID_REQUEST ) {
 	        // On ID Request message:
 	        /// Get new ID
 					char cNodeType = (char)_sensor;
 					uint64_t nIdentity = msg.getUInt64();
-	        UC newID = theConfig.lstNodes.requestNodeID(cNodeType, nIdentity);
+	        UC newID = theConfig.lstNodes.requestNodeID(replyTo, cNodeType, nIdentity);
 					pipe = CURRENT_NODE_PIPE;  // Use Base Network
 
 	        /// Send response message
@@ -435,7 +545,13 @@ bool RF24ServerClass::ProcessReceive()
 						LOGW(LOGTAG_MSG, "Failed to allocate NodeID type:%c to %s", cNodeType, PrintUint64(strDisplay, nIdentity));
 					}
 					msgReady = true;
-	      }
+	      } else if( msgType == I_CONFIG ) {
+					if( _bIsAck ) {
+						if( _sensor == NCF_QUERY ) {
+							theSys.GotNodeConfigAck(replyTo, payload);
+						}
+					}
+				}
 	      break;
 
 			case C_PRESENTATION:
@@ -445,12 +561,17 @@ bool RF24ServerClass::ProcessReceive()
 						// Presentation message: appear of Smart Lamp
 						// Verify credential, return token if true, and change device status
 						UC lv_nNodeID = msg.getSender();
+						UC lv_assoDev;
 						uint64_t nIdentity = msg.getUInt64();
-						token = theSys.VerifyDevicePresence(lv_nNodeID, msgType, nIdentity);
+						if( IS_GROUP_NODEID(lv_nNodeID) ) {
+							token = 6666;
+						} else {
+							token = theSys.VerifyDevicePresence(&lv_assoDev, lv_nNodeID, msgType, nIdentity);
+						}
 						if( token ) {
 							// return token
-							// Notes: lampType & S_LIGHT are not necessary
-			        msg.build(getAddress(), replyTo, _sensor, C_PRESENTATION, msgType, false, true);
+							// Notes: lampType & S_LIGHT (msgType) are not necessary, use for associated device
+			        msg.build(getAddress(), replyTo, _sensor, C_PRESENTATION, lv_assoDev, false, true);
 							msg.set((unsigned int)token);
 							msgReady = true;
 							// ToDo: send status req to this lamp
@@ -465,6 +586,24 @@ bool RF24ServerClass::ProcessReceive()
 				} else if( _sensor == S_LIGHT_LEVEL ) {
 					if( msgType == V_LIGHT_LEVEL) { // ALS
 						theSys.UpdateBrightness(replyTo, msg.getByte());
+					}
+				} else if( _sensor == S_SOUND ) {
+					if( msgType == V_STATUS ) { // MIC
+						theSys.UpdateSound(replyTo, payload[0]);
+					} else if( msgType == V_LEVEL ) {
+						_iValue = payload[1] * 256 + payload[0];
+						theSys.UpdateNoise(replyTo, _iValue);
+					}
+				} else if( _sensor == S_DUST || _sensor == S_AIR_QUALITY || _sensor == S_SMOKE ) {
+					if( msgType == V_LIGHT_LEVEL) { // Dust, Gas or Smoke
+						_iValue = payload[1] * 256 + payload[0];
+						if( _sensor == S_DUST ) {
+							theSys.UpdateDust(replyTo, _iValue);
+						} else if( _sensor == S_AIR_QUALITY ) {
+							theSys.UpdateGas(replyTo, _iValue);
+						} else if( _sensor == S_SMOKE ) {
+							theSys.UpdateSmoke(replyTo, _iValue);
+						}
 					}
 				}
 				break;
@@ -526,12 +665,37 @@ bool RF24ServerClass::ProcessReceive()
 			case C_SET:
 				// ToDo: verify token
 				// ToDo: if lamp is not present, return error
-				transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
-				if( transTo > 0 ) {
-					// Transfer message
-					msg.build(getAddress(), transTo, replyTo, C_SET, msgType, _needAck, _bIsAck, true);
-					// Keep payload unchanged
-					msgReady = true;
+				if( _sensor == NODEID_PROJECTOR ) {
+					// PPT control
+					if( msgType == V_STATUS ) {
+						// Keep payload unchanged
+						msg.build(NODEID_PROJECTOR, getAddress(), replyTo, C_SET, msgType, _needAck, _bIsAck, true);
+						// Convert to serial format
+						memset(strDisplay, 0x00, sizeof(strDisplay));
+						msg.getSerialString(strDisplay);
+						theBLE.sendCommand(strDisplay);
+					}
+				} else {
+					transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
+					if( transTo > 0 ) {
+						if( msgType == V_SCENE_ON ) {
+							theSys.ChangeLampScenario(transTo, payload[0]);
+						}	else {
+							// Transfer message
+							msg.build(getAddress(), transTo, replyTo, C_SET, msgType, _needAck, _bIsAck, true);
+							// Keep payload unchanged
+							msgReady = true;
+
+#ifdef BROADCAST_REPEAT
+							// Process broadcast message
+							if( transTo == BROADCAST_ADDRESS ) {
+								SetRepeatBCastMsg(&msg);
+								msgReady = false;	// Don't send, but leave it to repeat routine
+							}
+#endif
+
+						}
+					}
 				}
 				break;
 

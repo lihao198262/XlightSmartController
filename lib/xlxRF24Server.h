@@ -19,8 +19,10 @@ public:
   bool ProcessSend(String &strMsg, MyMessage &my_msg);
   bool ProcessSend(String &strMsg); //overloaded
   bool ProcessSend(MyMessage *pMsg = NULL);
+  bool SendNodeConfig(UC _node, UC _ncf, unsigned int _value);
   bool ProcessReceive();
   bool PeekMessage();
+  void SetRepeatBCastMsg(MyMessage *pMsg);
 
   unsigned long _times;
   unsigned long _succ;

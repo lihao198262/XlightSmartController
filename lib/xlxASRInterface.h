@@ -17,13 +17,13 @@ public:
 
   void Init(US _speed = SERIALPORT_SPEED_LOW);
   bool processCommand();
-  bool sendCommand(UC _cmd);
+  bool sendCommand(UC _cmd, bool now = false);
   UC getLastReceivedCmd();
   UC getLastSentCmd();
 
 private:
   US m_speed;
-  
+
   void executeCmd(UC _cmd);
 };
 
