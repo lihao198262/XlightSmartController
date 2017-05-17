@@ -122,7 +122,7 @@ void NodeListClass::publishNode(NodeIdRow_t _node)
 	char strDisplay[64];
 
 	UL lv_now = Time.now();
-	strTemp = String::format("{'node_id':%d,'mac':'%s','device':%d,'recent':%d}", _node.nid,
+	strTemp = String::format("{'nd':%d,'mac':'%s','device':%d,'recent':%d}", _node.nid,
 			PrintMacAddress(strDisplay, _node.identity), _node.device,
 			(_node.recentActive > 0 ? lv_now - _node.recentActive : -1));
 	theSys.PublishDeviceConfig(strTemp.c_str());
@@ -205,6 +205,7 @@ UC NodeListClass::requestNodeID(UC preferID, char type, uint64_t identity)
 
 	// Add or Update
 	if( nodeID > 0 ) {
+		NodeIdRow_t lv_Node;
 		lv_Node.nid = nodeID;
 		copyIdentity(lv_Node.identity, &identity);
 		lv_Node.recentActive = Time.now();
@@ -373,6 +374,8 @@ void ConfigClass::InitConfig()
 	m_config.maxBaseNetworkDuration = MAX_BASE_NETWORK_DUR;
 	m_config.useCloud = CLOUD_ENABLE;
 	m_config.stWiFi = 1;
+	m_config.bcMsgRtpTimes = 3;
+	m_config.ndMsgRtpTimes = 1;
 	memset(m_config.asrSNT, 0x00, MAX_ASR_SNT_ITEMS);
 }
 
@@ -397,6 +400,7 @@ BOOL ConfigClass::InitDevStatus(UC nodeID)
 	first_row.uid = theSys.DevStatus_table.size();
 	first_row.node_id = nodeID;
 	first_row.present = 0;
+	first_row.filter = 0;
 	first_row.token = 0;
 	first_row.type = devtypWRing3;  // White 3 rings
 	first_row.ring[0] = whiteHue;
@@ -1039,6 +1043,36 @@ BOOL ConfigClass::SetRFPowerLevel(UC level)
 		return true;
 	}
 	return false;
+}
+
+UC ConfigClass::GetBcMsgRptTimes()
+{
+	return m_config.bcMsgRtpTimes;
+}
+
+BOOL ConfigClass::SetBcMsgRptTimes(UC _times)
+{
+	if( _times != m_config.bcMsgRtpTimes ) {
+    m_config.bcMsgRtpTimes = _times;
+    m_isChanged = true;
+    return true;
+  }
+  return false;
+}
+
+UC ConfigClass::GetNdMsgRptTimes()
+{
+	return m_config.ndMsgRtpTimes;
+}
+
+BOOL ConfigClass::SetNdMsgRptTimes(UC _times)
+{
+	if( _times != m_config.ndMsgRtpTimes ) {
+    m_config.ndMsgRtpTimes = _times;
+    m_isChanged = true;
+    return true;
+  }
+  return false;
 }
 
 UC ConfigClass::GetASR_SNT(const UC _code)

@@ -286,7 +286,7 @@ BOOL SmartControllerClass::Start()
 		UL tm = 0x4ff;	// Delay 1.5s in order to publish
 		while(tm-- > 0){ Particle.process(); }
 	}
-	QueryDeviceStatus(CURRENT_DEVICE);
+	//QueryDeviceStatus(CURRENT_DEVICE);
 
 	// Request the main device to report status
 	RequestDeviceStatus(CURRENT_DEVICE);
@@ -430,6 +430,11 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 		theConfig.SaveConfig();
 	}
 
+	// Scan device list and check keepalive timeout
+	if( tickSaveConfig % (2000 / ms) == 0 ) { // every 2 second
+		CheckDevTimeout();
+	}
+
   // Slow Checking: once per 60 seconds
   if (++tickCheckRadio > 60000 / ms) {
 		// Check RF module
@@ -537,7 +542,7 @@ void SmartControllerClass::ProcessCommands()
 	theRadio.PeekMessage();
 
 	// Process RF2.4 messages
-	theRadio.ProcessReceive();
+	theRadio.ProcessMQ();
 
 	// Process Console Command
   theConsole.processCommand();
@@ -821,118 +826,110 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 		return 1;
 	}
 
-	if (!(*m_jpCldCmd).containsKey("cmd"))
+	rc = 0;
+	if ((*m_jpCldCmd).containsKey("cmd"))
   {
+		const COMMAND _cmd = (COMMAND)(*m_jpCldCmd)["cmd"].as<int>();
+		//COMMAND 0: Use Serial Interface
+		if( _cmd == CMD_SERIAL) {
+			// Execute serial port command, and reflect results on cloud variable
+			if ((*m_jpCldCmd).containsKey("data")) {
+				if( !theConfig.IsCloudSerialEnabled() ) {
+					LOGN(LOGTAG_MSG, "Cloud serial command is not allowed. Check system config.");
+					return 0;
+				}
+				const char* strData = (*m_jpCldCmd)["data"];
+				theConsole.ExecuteCloudCommand(strData);
+				return 1;
+			}
+		}
+		//COMMAND 1: Toggle light switch
+		else if (_cmd == CMD_POWER) {
+			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("state")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				const int state = (*m_jpCldCmd)["state"].as<int>();
+
+				//char buf[64];
+				//sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_STATUS, state);
+				//String strCmd(buf);
+				//ExecuteLightCommand(strCmd);
+				String strCmd = String::format("%d:7:%d", node_id, state);
+				return theRadio.ProcessSend(strCmd);
+			}
+		}
+		//COMMAND 2: Change light color
+		else if (_cmd == CMD_COLOR) {
+			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("ring")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				const uint8_t ring = (*m_jpCldCmd)["ring"][0].as<uint8_t>();
+				const uint8_t State = (*m_jpCldCmd)["ring"][1].as<uint8_t>();
+				const uint8_t BR = (*m_jpCldCmd)["ring"][2].as<uint8_t>();
+				const uint8_t W = (*m_jpCldCmd)["ring"][3].as<uint8_t>();
+				const uint8_t R = (*m_jpCldCmd)["ring"][4].as<uint8_t>();
+				const uint8_t G = (*m_jpCldCmd)["ring"][5].as<uint8_t>();
+				const uint8_t B = (*m_jpCldCmd)["ring"][6].as<uint8_t>();
+
+				MyMessage tmpMsg;
+				UC payl_buf[MAX_PAYLOAD];
+				UC payl_len;
+
+				payl_len = CreateColorPayload(payl_buf, ring, State, BR, W, R, G, B);
+				tmpMsg.build(theRadio.getAddress(), node_id, NODEID_DUMMY, C_SET, V_RGBW, true);
+				tmpMsg.set((void *)payl_buf, payl_len);
+				return theRadio.ProcessSend(&tmpMsg);
+			}
+		}
+		//COMMAND 3: Change brightness
+		//COMMAND 5: Change CCT
+		else if (_cmd == CMD_BRIGHTNESS || _cmd == CMD_CCT) {
+			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("value")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				const int value = (*m_jpCldCmd)["value"].as<int>();
+
+				//char buf[64];
+				//sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_DIMMER, value);
+				//String strCmd(buf);
+				//ExecuteLightCommand(strCmd);
+				// Use shortcut instead
+				String strCmd = String::format("%d:%d:%d", node_id, (_cmd == CMD_BRIGHTNESS ? 9 : 11), value);
+				return theRadio.ProcessSend(strCmd);
+			}
+		}
+		//COMMAND 4: Change color with scenario input
+		else if (_cmd == CMD_SCENARIO) {
+			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("SNT_id")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				const int SNT_uid = (*m_jpCldCmd)["SNT_id"].as<int>();
+				return ChangeLampScenario((UC)node_id, (UC)SNT_uid);
+			}
+		}
+		//COMMAND 6: Query Device Status
+		else if (_cmd == CMD_QUERY) {
+			if ((*m_jpCldCmd).containsKey("nd")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				UC ring_id = RING_ID_ALL;
+				if( (*m_jpCldCmd).containsKey("Ring") ) {
+					ring_id = (UC)(*m_jpCldCmd)["Ring"].as<int>();
+					if( ring_id > MAX_RING_NUM ) ring_id = RING_ID_ALL;
+				}
+				return QueryDeviceStatus((UC)node_id, ring_id);
+			}
+		}
+		//COMMAND 7: Special effect
+		else if (_cmd == CMD_EFFECT) {
+			if ((*m_jpCldCmd).containsKey("nd")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				const int filter_id = ((*m_jpCldCmd).containsKey("filter") ? (*m_jpCldCmd)["filter"].as<int>() : 0);
+				String strCmd = String::format("%d:17:%d", node_id, filter_id);
+				return theRadio.ProcessSend(strCmd);
+			}
+		}
+	}
+
+	if( rc == 0 ) {
 		LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
 		return 0;
-  }
-
-	const COMMAND _cmd = (COMMAND)(*m_jpCldCmd)["cmd"].as<int>();
-
-	//COMMAND 0: Use Serial Interface
-	if( _cmd == CMD_SERIAL) {
-		// Execute serial port command, and reflect results on cloud variable
-		if (!(*m_jpCldCmd).containsKey("data")) {
-			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
-			return 0;
-		}
-
-		if( !theConfig.IsCloudSerialEnabled() ) {
-			LOGN(LOGTAG_MSG, "Cloud serial command is not allowed. Check system config.");
-			return 0;
-		}
-		const char* strData = (*m_jpCldCmd)["data"];
-		theConsole.ExecuteCloudCommand(strData);
 	}
-
-	//COMMAND 1: Toggle light switch
-	if (_cmd == CMD_POWER) {
-		if (!(*m_jpCldCmd).containsKey("node_id") || !(*m_jpCldCmd).containsKey("state")) {
-			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
-			return 0;
-		}
-		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
-		const int state = (*m_jpCldCmd)["state"].as<int>();
-
-		//char buf[64];
-		//sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_STATUS, state);
-		//String strCmd(buf);
-		//ExecuteLightCommand(strCmd);
-		String strCmd = String::format("%d:7:%d", node_id, state);
-		theRadio.ProcessSend(strCmd);
-	}
-
-	//COMMAND 2: Change light color
-	if (_cmd == CMD_COLOR) {
-		if (!(*m_jpCldCmd).containsKey("node_id") || !(*m_jpCldCmd).containsKey("ring")) {
-			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
-			return 0;
-		}
-		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
-		const uint8_t ring = (*m_jpCldCmd)["ring"][0].as<uint8_t>();
-		const uint8_t State = (*m_jpCldCmd)["ring"][1].as<uint8_t>();
-		const uint8_t BR = (*m_jpCldCmd)["ring"][2].as<uint8_t>();
-		const uint8_t W = (*m_jpCldCmd)["ring"][3].as<uint8_t>();
-		const uint8_t R = (*m_jpCldCmd)["ring"][4].as<uint8_t>();
-		const uint8_t G = (*m_jpCldCmd)["ring"][5].as<uint8_t>();
-		const uint8_t B = (*m_jpCldCmd)["ring"][6].as<uint8_t>();
-
-		MyMessage tmpMsg;
-		UC payl_buf[MAX_PAYLOAD];
-		UC payl_len;
-
-		payl_len = CreateColorPayload(payl_buf, ring, State, BR, W, R, G, B);
-		tmpMsg.build(theRadio.getAddress(), node_id, NODEID_DUMMY, C_SET, V_RGBW, true);
-		tmpMsg.set((void *)payl_buf, payl_len);
-		theRadio.ProcessSend(&tmpMsg);
-	}
-
-	//COMMAND 3: Change brightness
-	//COMMAND 5: Change CCT
-	if (_cmd == CMD_BRIGHTNESS || _cmd == CMD_CCT) {
-		if (!(*m_jpCldCmd).containsKey("node_id") || !(*m_jpCldCmd).containsKey("value")) {
-			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
-			return 0;
-		}
-		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
-		const int value = (*m_jpCldCmd)["value"].as<int>();
-
-		//char buf[64];
-		//sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_DIMMER, value);
-		//String strCmd(buf);
-		//ExecuteLightCommand(strCmd);
-		// Use shortcut instead
-		String strCmd = String::format("%d:%d:%d", node_id, (_cmd == CMD_BRIGHTNESS ? 9 : 11), value);
-		theRadio.ProcessSend(strCmd);
-	}
-
-	//COMMAND 4: Change color with scenario input
-	if (_cmd == CMD_SCENARIO) {
-		if (!(*m_jpCldCmd).containsKey("node_id") || !(*m_jpCldCmd).containsKey("SNT_id")) {
-			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
-			return 0;
-		}
-		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
-		const int SNT_uid = (*m_jpCldCmd)["SNT_id"].as<int>();
-
-		ChangeLampScenario((UC)node_id, (UC)SNT_uid);
-	}
-
-	//COMMAND 6: Query Device Status
-	if (_cmd == CMD_QUERY) {
-		if (!(*m_jpCldCmd).containsKey("node_id")) {
-			LOGE(LOGTAG_MSG, "Error json cmd format: %s", jsonCmd.c_str());
-			return 0;
-		}
-		const int node_id = (*m_jpCldCmd)["node_id"].as<int>();
-		UC ring_id = RING_ID_ALL;
-		if( (*m_jpCldCmd).containsKey("Ring") ) {
-			ring_id = (UC)(*m_jpCldCmd)["Ring"].as<int>();
-			if( ring_id > MAX_RING_NUM ) ring_id = RING_ID_ALL;
-		}
-		QueryDeviceStatus((UC)node_id, ring_id);
-	}
-
 	return 1;
 }
 
@@ -1202,8 +1199,8 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 				if( data.containsKey("csc") ) {
 					// Change CSC
 					theConfig.SetCloudSerialEnabled(data["csc"] > 0);
-				} else if( data.containsKey("node_id") ) {
-					UC node_id = (UC)data["node_id"];
+				} else if( data.containsKey("nd") ) {
+					UC node_id = (UC)data["nd"];
 					if( data.containsKey("new_id") ) {
 						UC new_id = (UC)data["new_id"];
 						String strCmd = String::format("%d:1:%d", node_id, new_id);
@@ -1791,7 +1788,7 @@ bool SmartControllerClass::Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init
 		ChangeLampScenario(rulePtr->data.node_id, rulePtr->data.SNT_uid);
 
 		// Send Notification
-		if( rulePtr->data.notif_uid < 255 && Particle.connected() ) {
+		if( rulePtr->data.notif_uid < 255 ) {
 			StaticJsonBuffer<256> jBuf;
 			JsonObject *jroot;
 			jroot = &(jBuf.createObject());
@@ -2116,25 +2113,63 @@ ListNode<DevStatusRow_t> *SmartControllerClass::FindDevice(UC _nodeID)
 	return DevStatusRowPtr;
 }
 
+void SmartControllerClass::CheckDevTimeout()
+{
+	ListNode<DevStatusRow_t> *tmp = DevStatus_table.getRoot();
+	while (tmp != NULL)
+	{	// Only check actived device
+		if( tmp->data.present ) {
+			NodeIdRow_t lv_Node;
+			lv_Node.nid = tmp->data.node_id;
+			if( theConfig.lstNodes.get(&lv_Node) >= 0 ) {
+				if( Time.now() - lv_Node.recentActive > RTE_TM_KEEP_ALIVE ) {
+					ConfirmLampPresent(tmp, false);
+					return;
+				}
+			}
+		}
+		tmp = tmp->next;
+	}
+}
+
 UC SmartControllerClass::GetDevOnOff(UC _nodeID)
 {
 	//(m_pMainDev->data.ring[0].BR < BR_MIN_VALUE ? true : !m_pMainDev->data.ring[0].State);
-	return( thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF);
+	//return(thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF);
+	UC _st;
+	ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
+	if (DevStatusRowPtr) {
+		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? DEVICE_SW_OFF : DevStatusRowPtr->data.ring[0].State);
+	} else {
+		_st = thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF;
+	}
+	return _st;
 }
 
 UC SmartControllerClass::GetDevBrightness(UC _nodeID)
 {
-	UC _br = (UC)thePanel.GetDimmerValue();
-//	ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
-//	if (DevStatusRowPtr) {
-//		_br = DevStatusRowPtr->data.ring[0].BR;
-//	}
+	 //return((UC)thePanel.GetDimmerValue());
+	 UC _br;
+	 ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
+	 if (DevStatusRowPtr) {
+		 _br = DevStatusRowPtr->data.ring[0].BR;
+	 } else {
+		 _br = (UC)thePanel.GetDimmerValue();
+	 }
 	return _br;
 }
 
 US SmartControllerClass::GetDevCCT(UC _nodeID)
 {
-	return (US)thePanel.GetCCTValue();
+	//return (US)thePanel.GetCCTValue(false);
+	US _cct;
+	ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
+	if (DevStatusRowPtr) {
+		_cct = DevStatusRowPtr->data.ring[0].CCT;
+	} else {
+		_cct = (US)thePanel.GetCCTValue(false);
+	}
+ return _cct;
 }
 
 US SmartControllerClass::VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devType, uint64_t _identity)
@@ -2173,12 +2208,10 @@ US SmartControllerClass::VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devT
 		}
 
 		// Update DST item
-		DevStatusRowPtr->data.present = 1;
 		DevStatusRowPtr->data.type = _devType;
 		DevStatusRowPtr->data.token = token;
-		DevStatusRowPtr->data.flash_flag = UNSAVED; //required
-		DevStatusRowPtr->data.run_flag = EXECUTED; //redundant, already should be EXECUTED
-		theConfig.SetDSTChanged(true);
+		DevStatusRowPtr->data.present = 0;	// To make sure notification will be sent
+		ConfirmLampPresent(DevStatusRowPtr, true);
 	} else {
 		// Remote
 		theConfig.m_stMainRemote.node_id = _nodeID;
@@ -2236,7 +2269,7 @@ BOOL SmartControllerClass::ChangeBR_CCT(UC _nodeID, UC _br, US _cct)
 	return theRadio.ProcessSend(strCmd);
 }
 
-BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
+BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID, UC _replyTo)
 {
 	// Find node object
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
@@ -2264,7 +2297,7 @@ BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
 				} else {
 					strCmd = String::format("%d:13:%d:%d", _nodeID, rowptr->data.ring[0].BR, rowptr->data.ring[0].CCT);
 				}
-				theRadio.ProcessSend(strCmd);
+				theRadio.ProcessSend(strCmd, _replyTo);
 			} else { // Rainbow and Migrage
 				MyMessage tmpMsg;
 				UC payl_buf[MAX_PAYLOAD];
@@ -2277,13 +2310,13 @@ BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
 					if( !bAllRings || idx == 0 ) {
 						payl_len = CreateColorPayload(payl_buf, bAllRings ? RING_ID_ALL : idx + 1, rowptr->data.ring[idx].State,
 												rowptr->data.ring[idx].BR, rowptr->data.ring[idx].CCT % 256, rowptr->data.ring[idx].R, rowptr->data.ring[idx].G, rowptr->data.ring[idx].B);
-						tmpMsg.build(theRadio.getAddress(), _nodeID, 0, C_SET, V_RGBW, true);
+						tmpMsg.build(theRadio.getAddress(), _nodeID, _replyTo, C_SET, V_RGBW, true);
 						tmpMsg.set((void *)payl_buf, payl_len);
 						theRadio.ProcessSend(&tmpMsg);
 					}
 					if( IS_MIRAGE(lv_type) ) {
 						// ToDo: construct mirage message
-						//tmpMsg.build(theRadio.getAddress(), _nodeID, NODEID_DUMMY, C_SET, V_DISTANCE, true);
+						//tmpMsg.build(theRadio.getAddress(), _nodeID, _replyTo, C_SET, V_DISTANCE, true);
 						//tmpMsg.set((void *)payl_buf, payl_len);
 						//theRadio.ProcessSend(&tmpMsg);
 					}
@@ -2300,7 +2333,7 @@ BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID)
 	}
 
 	// Publish Device-Scenario-Change message
-	String strTemp = String::format("{'node_id':%d,'SNT_uid':%d,'found':%d}",
+	String strTemp = String::format("{'nd':%d,'SNT_uid':%d,'found':%d}",
 			 _nodeID, _scenarioID, _findIt);
 	PublishDeviceStatus(strTemp.c_str());
 
@@ -2321,6 +2354,7 @@ BOOL SmartControllerClass::ConfirmLampOnOff(UC _nodeID, UC _st)
 	//m_pMainDev->data.ring[0].State = _st;
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
+		DevStatusRowPtr->data.present = 1;
 		DevStatusRowPtr->data.ring[0].State = _st;
 		DevStatusRowPtr->data.ring[1].State = _st;
 		DevStatusRowPtr->data.ring[2].State = _st;
@@ -2335,17 +2369,8 @@ BOOL SmartControllerClass::ConfirmLampOnOff(UC _nodeID, UC _st)
 		}
 
 		// Publish device status event
-		StaticJsonBuffer<256> jBuf;
-		JsonObject *jroot;
-		jroot = &(jBuf.createObject());
-		if( jroot->success() ) {
-			(*jroot)["nd"] = _nodeID;
-			(*jroot)["State"] = _st;
-			char buffer[256];
-			jroot->printTo(buffer, 256);
-			PublishDeviceStatus(buffer);
-		}
-
+		String strTemp = String::format("{'nd':%d,'State':%d}", _nodeID, _st);
+		PublishDeviceStatus(strTemp.c_str());
 		rc = true;
 	}
 	return rc;
@@ -2358,7 +2383,9 @@ BOOL SmartControllerClass::ConfirmLampBrightness(UC _nodeID, UC _st, UC _percent
 	//m_pMainDev->data.ring[0].BR = _percentage;
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
+		ConfirmLampPresent(DevStatusRowPtr, true);
 		if( DevStatusRowPtr->data.ring[r_index].State != _st || DevStatusRowPtr->data.ring[r_index].BR != _percentage ) {
+			DevStatusRowPtr->data.present = 1;
 			DevStatusRowPtr->data.ring[r_index].State = _st;
 			DevStatusRowPtr->data.ring[r_index].BR = _percentage;
 			if( _ringID == RING_ID_ALL ) {
@@ -2382,22 +2409,16 @@ BOOL SmartControllerClass::ConfirmLampBrightness(UC _nodeID, UC _st, UC _percent
 			}
 
 			// Publish device status event
-			StaticJsonBuffer<256> jBuf;
-			JsonObject *jroot;
-			jroot = &(jBuf.createObject());
-			if( jroot->success() ) {
-				(*jroot)["nd"] = _nodeID;
-				if( _ringID != RING_ID_ALL ) {
-					(*jroot)["Ring"] = _ringID;
-				}
-				(*jroot)["State"] = _st;
-				(*jroot)["BR"] = _percentage;
-				char buffer[256];
-				jroot->printTo(buffer, 256);
-				PublishDeviceStatus(buffer);
+			String strTemp;
+			if( _ringID != RING_ID_ALL ) {
+				strTemp = String::format("{'nd':%d,'Ring':%d,'State':%d,'BR':%d}",
+					_nodeID, _ringID, _st, _percentage);
+			} else {
+			 	strTemp = String::format("{'nd':%d,'State':%d,'BR':%d}",
+					_nodeID, _st, _percentage);
 			}
+			PublishDeviceStatus(strTemp.c_str());
 		}
-
 		rc = true;
 	}
 	return rc;
@@ -2410,7 +2431,9 @@ BOOL SmartControllerClass::ConfirmLampCCT(UC _nodeID, US _cct, UC _ringID)
 	//m_pMainDev->data.ring[0].CCT = _cct;
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
+		ConfirmLampPresent(DevStatusRowPtr, true);
 		if( DevStatusRowPtr->data.ring[r_index].CCT != _cct ) {
+			DevStatusRowPtr->data.present = 1;
 			DevStatusRowPtr->data.ring[r_index].CCT = _cct;
 			if( _ringID == RING_ID_ALL ) {
 				DevStatusRowPtr->data.ring[1].CCT = _cct;
@@ -2430,22 +2453,15 @@ BOOL SmartControllerClass::ConfirmLampCCT(UC _nodeID, US _cct, UC _ringID)
 			}
 
 			// Publish device status event
-			StaticJsonBuffer<256> jBuf;
-			JsonObject *jroot;
-			jroot = &(jBuf.createObject());
-			if( jroot->success() ) {
-				(*jroot)["nd"] = _nodeID;
-				if( _ringID != RING_ID_ALL ) {
-					(*jroot)["Ring"] = _ringID;
-				}
-				(*jroot)["CCT"] = _cct;
-				char buffer[256];
-				jroot->printTo(buffer, 256);
-				PublishDeviceStatus(buffer);
+			String strTemp;
+			if( _ringID != RING_ID_ALL ) {
+				strTemp = String::format("{'nd':%d,'Ring':%d,'CCT':%d}", _nodeID, _ringID, _cct);
+			} else {
+			 	strTemp = String::format("{'nd':%d,'CCT':%d}", _nodeID, _cct);
 			}
+			PublishDeviceStatus(strTemp.c_str());
+			rc = true;
 		}
-
-		rc = true;
 	}
 	return rc;
 }
@@ -2456,6 +2472,7 @@ BOOL SmartControllerClass::ConfirmLampHue(UC _nodeID, UC _white, UC _red, UC _gr
 	UC r_index = (_ringID == RING_ID_ALL ? 0 : _ringID - 1);
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
+		ConfirmLampPresent(DevStatusRowPtr, true);
 		if( (DevStatusRowPtr->data.ring[r_index].CCT % 256) != _white ||
 		    DevStatusRowPtr->data.ring[r_index].R != _red ||
 			  DevStatusRowPtr->data.ring[r_index].G != _green ||
@@ -2481,37 +2498,31 @@ BOOL SmartControllerClass::ConfirmLampHue(UC _nodeID, UC _white, UC _red, UC _gr
 			theConfig.SetDSTChanged(true);
 
 			// Publish device status event
-			StaticJsonBuffer<256> jBuf;
-			JsonObject *jroot;
-			jroot = &(jBuf.createObject());
-			if( jroot->success() ) {
-				(*jroot)["nd"] = _nodeID;
-				if( _ringID != RING_ID_ALL ) {
-					(*jroot)["Ring"] = _ringID;
-				}
-				(*jroot)["W"] = _white;
-				(*jroot)["R"] = _red;
-				(*jroot)["G"] = _green;
-				(*jroot)["B"] = _blue;
-				char buffer[256];
-				jroot->printTo(buffer, 256);
-				PublishDeviceStatus(buffer);
+			String strTemp;
+			if( _ringID != RING_ID_ALL ) {
+				strTemp = String::format("{'nd':%d,'Ring':%d,'W':%d,'R':%d,'G':%d,'B':%d}",
+				  _nodeID, _ringID, _white, _red, _green, _blue);
+			} else {
+			 	strTemp = String::format("{'nd':%d,'W':%d,'R':%d,'G':%d,'B':%d}",
+				  _nodeID, _white, _red, _green, _blue);
 			}
+			PublishDeviceStatus(strTemp.c_str());
+			rc = true;
 		}
-		rc = true;
 	}
 	return rc;
 }
 
 BOOL SmartControllerClass::ConfirmLampTop(UC _nodeID, UC *_payl, UC _len)
 {
-	BOOL rc = false, bChanged = false;
+	BOOL bChanged = false;
 	UC _ringID, _L1, _L2, _L3;
 	UC r_index, _pos = 3;
 
 	if( _len >= 7 ) {
 		ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 		if (DevStatusRowPtr) {
+			ConfirmLampPresent(DevStatusRowPtr, true);
 			StaticJsonBuffer<256> jBuf;
 			JsonObject *jroot;
 			jroot = &(jBuf.createObject());
@@ -2572,7 +2583,58 @@ BOOL SmartControllerClass::ConfirmLampTop(UC _nodeID, UC *_payl, UC _len)
 		}
 	}
 
-	return rc;
+	return bChanged;
+}
+
+BOOL SmartControllerClass::ConfirmLampFilter(UC _nodeID, UC _filter)
+{
+	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
+	if (DevStatusRowPtr) {
+		ConfirmLampPresent(DevStatusRowPtr, true);
+		if( DevStatusRowPtr->data.filter != _filter ) {
+			DevStatusRowPtr->data.filter = _filter;
+			DevStatusRowPtr->data.run_flag = EXECUTED;
+			DevStatusRowPtr->data.flash_flag = UNSAVED;
+			DevStatusRowPtr->data.op_flag = POST;
+			theConfig.SetDSTChanged(true);
+
+			// Publish device status event
+			String strTemp = String::format("{'nd':%d,'filter':%d}", _nodeID, _filter);
+			PublishDeviceStatus(strTemp.c_str());
+			return true;
+		}
+	}
+	return false;
+}
+
+BOOL SmartControllerClass::ConfirmLampPresent(ListNode<DevStatusRow_t> *pDev, bool _up)
+{
+	if( pDev ) {
+		if( _up ) {
+			// Update keepalive timer
+			NodeIdRow_t lv_Node;
+			lv_Node.nid = pDev->data.node_id;
+			if( theConfig.lstNodes.get(&lv_Node) >= 0 ) {
+				// Update timestamp
+				lv_Node.recentActive = Time.now();
+				theConfig.lstNodes.update(&lv_Node);
+			}
+		}
+		if( pDev->data.present != _up ) {
+			pDev->data.present = _up;
+			pDev->data.run_flag = EXECUTED;
+			pDev->data.flash_flag = UNSAVED;
+			pDev->data.op_flag = POST;
+			theConfig.SetNIDChanged(true);
+			theConfig.SetDSTChanged(true);
+
+			// Publish device status event
+			String strTemp = String::format("{'nd':%d,'up':%d}", pDev->data.node_id, _up ? 1 : 0);
+			PublishDeviceStatus(strTemp.c_str());
+			return true;
+		}
+	}
+	return false;
 }
 
 BOOL SmartControllerClass::QueryDeviceStatus(UC _nodeID, UC _ringID)
@@ -2584,45 +2646,50 @@ BOOL SmartControllerClass::QueryDeviceStatus(UC _nodeID, UC _ringID)
 		char buffer[256];
 		jroot = &(jBuf.createObject());
 		if( jroot->success() ) {
-			if( IS_SUNNY(DevStatusRowPtr->data.type) ) {
-				(*jroot)["nd"] = DevStatusRowPtr->data.node_id;
-				(*jroot)["State"] = DevStatusRowPtr->data.ring[0].State;
-				(*jroot)["BR"] = DevStatusRowPtr->data.ring[0].BR;
-				(*jroot)["CCT"] = DevStatusRowPtr->data.ring[0].CCT;
-				jroot->printTo(buffer, 256);
-				return PublishDeviceStatus(buffer);
-			} else if( IS_RAINBOW(DevStatusRowPtr->data.type) || IS_MIRAGE(DevStatusRowPtr->data.type) ) {
-				UC r_index;
-				BOOL _bMore = false;
-				do {
-					if( _ringID > MAX_RING_NUM ) {
-						_bMore = false;
-						break;
-					}
-					(*jroot)["nd"] = DevStatusRowPtr->data.node_id;
-					if( _ringID == RING_ID_ALL ) {
-						r_index = 0;
-						if( IsAllRingHueSame(DevStatusRowPtr) ) {
-							(*jroot)["Ring"] = RING_ID_ALL;
-						} else {
-							(*jroot)["Ring"] = RING_ID_1;
-							_bMore = true;
-							_ringID = RING_ID_2;	// Next
-						}
-					} else {
-						r_index = _ringID - 1;
-						(*jroot)["Ring"] = RING_ID_1;
-						if( _bMore ) _ringID++;
-					}
-					(*jroot)["State"] = DevStatusRowPtr->data.ring[r_index].State;
-					(*jroot)["BR"] = DevStatusRowPtr->data.ring[r_index].BR;
-					(*jroot)["W"] = DevStatusRowPtr->data.ring[r_index].CCT % 256;
-					(*jroot)["R"] = DevStatusRowPtr->data.ring[r_index].R;
-					(*jroot)["G"] = DevStatusRowPtr->data.ring[r_index].G;
-					(*jroot)["B"] = DevStatusRowPtr->data.ring[r_index].B;
+			(*jroot)["nd"] = DevStatusRowPtr->data.node_id;
+			(*jroot)["tp"] = DevStatusRowPtr->data.type;
+			if( !DevStatusRowPtr->data.present ) {
+				(*jroot)["up"] = 0;
+			} else {
+				if(DevStatusRowPtr->data.filter > 0)(*jroot)["filter"] = DevStatusRowPtr->data.filter;
+				if( IS_SUNNY(DevStatusRowPtr->data.type) ) {
+					(*jroot)["State"] = DevStatusRowPtr->data.ring[0].State;
+					(*jroot)["BR"] = DevStatusRowPtr->data.ring[0].BR;
+					(*jroot)["CCT"] = DevStatusRowPtr->data.ring[0].CCT;
 					jroot->printTo(buffer, 256);
-					PublishDeviceStatus(buffer);
-				} while(_bMore);
+					return PublishDeviceStatus(buffer);
+				} else if( IS_RAINBOW(DevStatusRowPtr->data.type) || IS_MIRAGE(DevStatusRowPtr->data.type) ) {
+					UC r_index;
+					BOOL _bMore = false;
+					do {
+						if( _ringID > MAX_RING_NUM ) {
+							_bMore = false;
+							break;
+						}
+						if( _ringID == RING_ID_ALL ) {
+							r_index = 0;
+							if( IsAllRingHueSame(DevStatusRowPtr) ) {
+								(*jroot)["Ring"] = RING_ID_ALL;
+							} else {
+								(*jroot)["Ring"] = RING_ID_1;
+								_bMore = true;
+								_ringID = RING_ID_2;	// Next
+							}
+						} else {
+							r_index = _ringID - 1;
+							(*jroot)["Ring"] = RING_ID_1;
+							if( _bMore ) _ringID++;
+						}
+						(*jroot)["State"] = DevStatusRowPtr->data.ring[r_index].State;
+						(*jroot)["BR"] = DevStatusRowPtr->data.ring[r_index].BR;
+						(*jroot)["W"] = DevStatusRowPtr->data.ring[r_index].CCT % 256;
+						(*jroot)["R"] = DevStatusRowPtr->data.ring[r_index].R;
+						(*jroot)["G"] = DevStatusRowPtr->data.ring[r_index].G;
+						(*jroot)["B"] = DevStatusRowPtr->data.ring[r_index].B;
+						jroot->printTo(buffer, 256);
+						PublishDeviceStatus(buffer);
+					} while(_bMore);
+				}
 			}
 			return true;
 		}
@@ -2657,7 +2724,8 @@ String SmartControllerClass::print_devStatus_table(int row)
 
 	SERIAL_LN("==== DevStatus Row %d ====", row);
 	SERIAL_LN("%cuid = %d, type = %d", DevStatus_table.get(row).node_id == CURRENT_DEVICE ? '*' : ' ', DevStatus_table.get(row).uid, DevStatus_table.get(row).type);
-	SERIAL_LN("node_id = %d, present = %s", DevStatus_table.get(row).node_id, (DevStatus_table.get(row).present ? "true" : "false"));
+	SERIAL_LN("node_id = %d, present:%s, filter:%d", DevStatus_table.get(row).node_id,
+	    (DevStatus_table.get(row).present ? "true" : "false"), DevStatus_table.get(row).filter);
 
 	if( IS_SUNNY(DevStatus_table.get(row).type) ) {
 		SERIAL_LN("Status: %s, BR: %d, CCT: %d\n\r", DevStatus_table.get(row).ring[0].State ? "On" : "Off",

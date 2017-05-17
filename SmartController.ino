@@ -103,6 +103,10 @@ void setup()
   // Load Configuration
   theConfig.LoadConfig();
 
+	// Initiaze Cloud Variables & Functions
+	///It is fine to call this function when the cloud is disconnected - Objects will be registered next time the cloud is connected
+  theSys.InitCloudObj();
+
   // Initialize Pins
   theSys.InitPins();
 
@@ -148,10 +152,6 @@ void setup()
 
   // Initialization network Interfaces
   theSys.InitNetwork();
-
-	// Initiaze Cloud Variables & Functions
-	///It is fine to call this function when the cloud is disconnected - Objects will be registered next time the cloud is connected
-  theSys.InitCloudObj();
 
 	// Wait the system started
 	if( Particle.connected() == true ) {

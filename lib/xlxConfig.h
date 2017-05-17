@@ -59,8 +59,12 @@ typedef struct
   UC typeMainDevice           :8;           // Type of the main lamp
   UC numDevices               :8;           // Number of devices
   Timezone_t timeZone;                      // Time zone
-  char Organization[24];                    // Organization name
-  char ProductName[24];                     // Product name
+  char Organization[20];                    // Organization name
+  UC bcMsgRtpTimes            :4;           // Broadcast message repeat times
+  UC ndMsgRtpTimes            :4;           // Node message repeat times
+  UC Reserved_UC1[3];
+  char ProductName[20];                     // Product name
+  UC Reserved_UC2[4];
   char Token[64];                           // Token
   BOOL enableCloudSerialCmd   :1;           // Whether enable cloud serial command
   BOOL enableDailyTimeSync    :1;           // Whether enable daily time synchronization
@@ -94,7 +98,8 @@ typedef struct
   UC uid;						   // required
   UC node_id;          // RF nodeID
   UC present              :1;  // 0 - not present; 1 - present
-  UC reserved             :7;
+  UC reserved             :3;
+  UC filter               :4;
   UC type;                         // Type of lamp
   US token;
   Hue_t ring[MAX_RING_NUM];
@@ -227,7 +232,8 @@ typedef struct
 	UC uid			            : 8;
   UC sw                   : 2; // Main Switch: Switch value for set power command
 	Hue_t ring[MAX_RING_NUM];
-	UC filter		            : 8;
+	UC filter		            : 4;
+  UC reserverd            : 4;
 } ScenarioRow_t;
 
 #define SNT_ROW_SIZE	sizeof(ScenarioRow_t)
@@ -406,6 +412,12 @@ public:
 
   UC GetRFPowerLevel();
   BOOL SetRFPowerLevel(UC level);
+
+  UC GetBcMsgRptTimes();
+  BOOL SetBcMsgRptTimes(UC _times);
+
+  UC GetNdMsgRptTimes();
+  BOOL SetNdMsgRptTimes(UC _times);
 
   UC GetASR_SNT(const UC _code);
   BOOL SetASR_SNT(const UC _code, const UC _snt = 0);

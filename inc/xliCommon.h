@@ -65,7 +65,7 @@ enum FLASH_FLAG {UNSAVED, SAVED};
 enum RUN_FLAG {UNEXECUTED, EXECUTED};
 
 //enum values for CldJSONCommand()
-enum COMMAND {CMD_SERIAL, CMD_POWER, CMD_COLOR, CMD_BRIGHTNESS, CMD_SCENARIO, CMD_CCT, CMD_QUERY};
+enum COMMAND {CMD_SERIAL, CMD_POWER, CMD_COLOR, CMD_BRIGHTNESS, CMD_SCENARIO, CMD_CCT, CMD_QUERY, CMD_EFFECT};
 
 // Switch value for set power command
 #define DEVICE_SW_OFF               0       // Turn Off
@@ -79,6 +79,13 @@ enum COMMAND {CMD_SERIAL, CMD_POWER, CMD_COLOR, CMD_BRIGHTNESS, CMD_SCENARIO, CM
 #define OPERATOR_SUB                2
 #define OPERATOR_MUL                3
 #define OPERATOR_DIV                4
+
+// Filter (special effect)
+#define FILTER_SP_EF_NONE           0
+#define FILTER_SP_EF_BREATH         1       // Normal breathing light
+#define FILTER_SP_EF_FAST_BREATH    2       // Fast breathing light
+#define FILTER_SP_EF_FLORID         3       // Randomly altering color
+#define FILTER_SP_EF_FAST_FLORID    4       // Fast randomly altering color
 
 // Macros for UID identifiers
 #define CLS_RULE                  'r'

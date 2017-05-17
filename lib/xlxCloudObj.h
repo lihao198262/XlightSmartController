@@ -37,19 +37,24 @@
 // 2. The length of the topic is limited to a max of 63 characters.
 // 3. The maximum length of data is 255 bytes.
 /// Alarm event
+#define CLT_ID_Alarm            1
 #define CLT_NAME_Alarm          "xlc-event-alarm"
 #define CLT_TTL_Alarm           1800              // 0.5 hour
 /// Sensor data update
+#define CLT_ID_SensorData       2
 #define CLT_NAME_SensorData     "xlc-data-sensor"
 #define CLT_TTL_SensorData      RTE_DELAY_PUBLISH
 #define CLT_TTL_MotionData      5
 /// LOG Message
+#define CLT_ID_LOGMSG           3
 #define CLT_NAME_LOGMSG         "xlc-event-log"
 #define CLT_TTL_LOGMSG          3600              // 1 hour
 /// Device status event
+#define CLT_ID_DeviceStatus     4
 #define CLT_NAME_DeviceStatus   "xlc-status-device"
 #define CLT_TTL_DeviceStatus    10
 /// Device profile event
+#define CLT_ID_DeviceConfig     5
 #define CLT_NAME_DeviceConfig   "xlc-config-device"
 #define CLT_TTL_DeviceConfig    30
 

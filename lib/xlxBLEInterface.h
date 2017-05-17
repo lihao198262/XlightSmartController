@@ -26,6 +26,7 @@ public:
   void processCommand();
   BOOL exectueCommand(char *inputString);
   BOOL sendCommand(String _cmd);
+  BOOL sendNotification(const UC _id, String _data);
 
 private:
   UC m_pin_state;

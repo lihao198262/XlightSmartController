@@ -26,7 +26,7 @@
 #endif
 
 // Change it only if Config_t structure is updated
-#define VERSION_CONFIG_DATA       8
+#define VERSION_CONFIG_DATA       11
 
 // Xlight Application Identification
 #define XLA_ORGANIZATION          "xlight.ca"               // Default value. Read from EEPROM
@@ -47,6 +47,9 @@
 
 // Number of ticks on System Timer
 #define RTE_TICK_FASTPROCESS			1						// Pace of execution of FastProcess
+
+// Keep alive message timeout
+#define RTE_TM_KEEP_ALIVE         15
 
 // Panel Operarion Timers
 #define RTE_TM_MAX_CCT_IDLE       6           // Maximum idle time (seconds) in CCT control mode
@@ -75,7 +78,8 @@
 #define SENSORDATA_JSON_SIZE		196
 
 // Maximum RF messages buffered
-#define MQ_MAX_RF_MSG           5
+#define MQ_MAX_RF_RCVMSG        5
+#define MQ_MAX_RF_SNDMSG        8
 
 // Maximum Cloud Command messages buffered
 #define MQ_MAX_CLOUD_MSG        6

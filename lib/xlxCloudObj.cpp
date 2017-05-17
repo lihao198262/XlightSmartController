@@ -25,6 +25,7 @@
 
 #include "xlxCloudObj.h"
 #include "xlxLogger.h"
+#include "xlxBLEInterface.h"
 
 //------------------------------------------------------------------
 // Xlight Cloud Object Class
@@ -234,13 +235,13 @@ BOOL CloudObjClass::UpdateSmoke(uint8_t nid, uint16_t value)
     /*
     if( m_jpData->success() )
     {
-      (*m_jpData)["SMOKE"] = value;
+      (*m_jpData)["SMK"] = value;
     }
     */
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
-      String strTemp = String::format("{'nd':%d,'SMOKE':%d}", nid, value);
+      String strTemp = String::format("{'nd':%d,'SMK':%d}", nid, value);
       Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
     }
 #endif
@@ -280,13 +281,13 @@ BOOL CloudObjClass::UpdateNoise(uint8_t nid, uint16_t value)
     /*
     if( m_jpData->success() )
     {
-      (*m_jpData)["MIC"] = value;
+      (*m_jpData)["NOS"] = value;
     }
     */
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
-      String strTemp = String::format("{'nd':%d,'NOISE':%d}", nid, value);
+      String strTemp = String::format("{'nd':%d,'NOS':%d}", nid, value);
       Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
     }
 #endif
@@ -329,6 +330,10 @@ BOOL CloudObjClass::PublishLog(const char *msg)
     rc = Particle.publish(CLT_NAME_LOGMSG, msg, CLT_TTL_LOGMSG, PRIVATE);
   }
 #endif
+
+  // Notify via BLE
+  //if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_LOGMSG, msg);
+
   return rc;
 }
 
@@ -341,6 +346,10 @@ BOOL CloudObjClass::PublishDeviceStatus(const char *msg)
     rc = Particle.publish(CLT_NAME_DeviceStatus, msg, CLT_TTL_DeviceStatus, PRIVATE);
   }
 #endif
+
+  // Notify via BLE
+  if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_DeviceStatus, msg);
+
   return rc;
 }
 
@@ -348,7 +357,7 @@ void CloudObjClass::GotNodeConfigAck(const UC _nodeID, const UC *data)
 {
 	String strTemp;
 
-  strTemp = String::format("{'node_id':%d,'ver':%d,'type':%d,'senMap':%d,'funcMap':%d,'data':[%d,%d,%d,%d,%d,%d]}",
+  strTemp = String::format("{'nd':%d,'ver':%d,'tp':%d,'senMap':%d,'funcMap':%d,'data':[%d,%d,%d,%d,%d,%d]}",
 			 _nodeID, data[0], data[1],	data[2] + data[3]*256, data[4] + data[5]*256,
        data[6], data[7], data[8], data[9], data[10], data[11]);
 	PublishDeviceConfig(strTemp.c_str());
@@ -363,6 +372,10 @@ BOOL CloudObjClass::PublishDeviceConfig(const char *msg)
     rc = Particle.publish(CLT_NAME_DeviceConfig, msg, CLT_TTL_DeviceConfig, PRIVATE);
   }
 #endif
+
+  // Notify via BLE
+  if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_DeviceConfig, msg);
+
   return rc;
 }
 
@@ -375,6 +388,10 @@ BOOL CloudObjClass::PublishAlarm(const char *msg)
     rc = Particle.publish(CLT_NAME_Alarm, msg, CLT_TTL_Alarm, PRIVATE);
   }
 #endif
+
+  // Notify via BLE
+  if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_Alarm, msg);
+
   return rc;
 }
 

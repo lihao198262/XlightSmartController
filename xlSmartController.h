@@ -118,6 +118,7 @@ public:
   // Device Operations, will be moved to dedicate class later
   BOOL FindCurrentDevice();
   ListNode<DevStatusRow_t> *FindDevice(UC _nodeID);
+  void CheckDevTimeout();
 
   UC GetDevOnOff(UC _nodeID);
   UC GetDevBrightness(UC _nodeID);
@@ -128,13 +129,15 @@ public:
   BOOL ChangeLampBrightness(UC _nodeID = NODEID_MAINDEVICE, UC _percentage = 50);
   BOOL ChangeLampCCT(UC _nodeID = NODEID_MAINDEVICE, US _cct = 3000);
   BOOL ChangeBR_CCT(UC _nodeID, UC _br, US _cct);
-  BOOL ChangeLampScenario(UC _nodeID, UC _scenarioID);
+  BOOL ChangeLampScenario(UC _nodeID, UC _scenarioID, UC _replyTo = 0);
   BOOL RequestDeviceStatus(UC _nodeID);
   BOOL ConfirmLampOnOff(UC _nodeID, UC _st);
   BOOL ConfirmLampBrightness(UC _nodeID, UC _st, UC _percentage, UC _ringID = RING_ID_ALL);
   BOOL ConfirmLampCCT(UC _nodeID, US _cct, UC _ringID = RING_ID_ALL);
   BOOL ConfirmLampHue(UC _nodeID, UC _white, UC _red, UC _green, UC _blue, UC _ringID = RING_ID_ALL);
   BOOL ConfirmLampTop(UC _nodeID, UC *_payl, UC _len);
+  BOOL ConfirmLampFilter(UC _nodeID, UC _filter);
+  BOOL ConfirmLampPresent(ListNode<DevStatusRow_t> *pDev, bool _up);
   BOOL QueryDeviceStatus(UC _nodeID, UC _ringID = RING_ID_ALL);
   BOOL IsAllRingHueSame(ListNode<DevStatusRow_t> *pDev);
 

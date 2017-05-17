@@ -191,9 +191,9 @@ void xlPanelClass::UpdateDimmerValue(int16_t _value)
   m_nDimmerValue = _value;
 }
 
-int16_t xlPanelClass::GetCCTValue()
+int16_t xlPanelClass::GetCCTValue(const bool _percent)
 {
-	return m_nCCTValue;
+	return(_percent ? m_nCCTValue : map(m_nCCTValue, 0, 100, CT_MIN_VALUE, CT_MAX_VALUE));
 }
 
 void xlPanelClass::SetCCTValue(int16_t _value)

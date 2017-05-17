@@ -36,7 +36,31 @@ test(serialconsole)
   theSys.CldJSONCommand("{'cmd':0, 'data':'ping'}");
   theSys.CldJSONCommand("{'cmd':0, 'data':'sys reset'}");
   theSys.CldJSONCommand("{'cmd':0, 'data':'show time'}");}
-  theSys.CldJSONCommand("{'cmd':6, 'node_id':1}");}
+  theSys.CldJSONCommand("{'cmd':6, 'nd':1}");}
+
+test(cloudcmd)
+{
+  // CMD_POWER ON
+  theSys.CldJSONCommand("{'cmd':1, 'nd':1, 'state':1}");
+
+  // CMD_POWER OFF
+  theSys.CldJSONCommand("{'cmd':1, 'nd':1, 'state':0}");
+
+  // CMD_BRIGHTNESS
+  theSys.CldJSONCommand("{'cmd':3, 'nd':1, 'value':60}");
+
+  // CMD_CCT
+  theSys.CldJSONCommand("{'cmd':5, 'nd':1, 'value':3500}");
+
+  // CMD_SCENARIO
+  theSys.CldJSONCommand("{'cmd':4, 'nd':1, 'SNT_id':1}");
+
+  // CMD_EFFECT
+  theSys.CldJSONCommand("{'cmd':7, 'nd':1, 'filter':1}");
+
+  // CMD_QUERY
+  theSys.CldJSONCommand("{'cmd':6, 'nd':1}");
+}
 
 test(cloudinput)
 {
@@ -81,7 +105,7 @@ test(cloudinput)
   theSys.CldJSONConfig("{'op':1, 'fl':0, 'run':0, 'uid':'s1','sw':1}");
   // Execute scenerio to make sure it is saved immediatly
   /// Option 1: could command
-  theSys.CldJSONCommand("{'cmd':4, 'node_id':1, 'SNT_id':1}");
+  theSys.CldJSONCommand("{'cmd':4, 'nd':1, 'SNT_id':1}");
   /// Option 2: serial command
   // send 1:15:1
 
@@ -89,15 +113,15 @@ test(cloudinput)
   theSys.CldJSONConfig("{'op':1, 'fl':0, 'run':0, 'uid':'s3','ring0':[1,80,3500,0,0,0]}");
   // Execute scenerio to make sure it is saved immediatly
   /// Option 1: could command
-  theSys.CldJSONCommand("{'cmd':4, 'node_id':1, 'SNT_id':1}");
+  theSys.CldJSONCommand("{'cmd':4, 'nd':1, 'SNT_id':3}");
   /// Option 2: serial command
-  // send 1:15:1
+  // send 1:15:3
 
   // Example 3: Turn off the lights
   theSys.CldJSONConfig("{'op':1, 'fl':0, 'run':0, 'uid':'s2','sw':0}");
   // Execute scenerio to make sure it is saved immediatly
   /// Option 1: could command
-  theSys.CldJSONCommand("{'cmd':4, 'node_id':1, 'SNT_id':2}");
+  theSys.CldJSONCommand("{'cmd':4, 'nd':1, 'SNT_id':2}");
   /// Option 2: serial command
   // send 1:15:2
 
@@ -190,7 +214,7 @@ test(alarm_all_red)
 
   //rules row uid = 0
   theSys.CldJSONConfig("{'x0': '{\"op\":1, \"fl\":0, \"run\":0, \"uid\": \"r0\", '}");
-  theSys.CldJSONConfig("\"node_id\":1, \"SCT_uid\":1, \"SNT_uid\":0, \"notif_uid\":0}");
+  theSys.CldJSONConfig("\"nd\":1, \"SCT_uid\":1, \"SNT_uid\":0, \"notif_uid\":0}");
 }
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

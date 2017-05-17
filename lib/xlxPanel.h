@@ -38,7 +38,7 @@ public:
   int16_t GetDimmerValue();
   void SetDimmerValue(int16_t _value);
   void UpdateDimmerValue(int16_t _value);
-  int16_t GetCCTValue();
+  int16_t GetCCTValue(const bool _percent = true);
   void SetCCTValue(int16_t _value);
   void UpdateCCTValue(uint16_t _value);
   uint8_t GetButtonStatus();
