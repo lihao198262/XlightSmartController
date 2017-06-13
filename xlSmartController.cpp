@@ -339,11 +339,13 @@ BOOL SmartControllerClass::connectWiFi()
 {
 	BOOL retVal = WiFi.ready();
 	if( !retVal ) {
-		SERIAL("Wi-Fi connecting...");
-	  WiFi.connect();
-	  waitFor(WiFi.ready, RTE_WIFI_CONN_TIMEOUT);
-	  retVal = WiFi.ready();
-		SERIAL_LN("%s", retVal ? "OK" : "Failed");
+		if( WiFi.hasCredentials() ) {
+			SERIAL("Wi-Fi connecting...");
+		  WiFi.connect();
+		  waitFor(WiFi.ready, RTE_WIFI_CONN_TIMEOUT);
+		  retVal = WiFi.ready();
+			SERIAL_LN("%s", retVal ? "OK" : "Failed");
+		}
 	}
   theConfig.SetWiFiStatus(retVal);
   return retVal;
@@ -535,9 +537,8 @@ BOOL SmartControllerClass::IsWANGood()
 	return m_isWAN;
 }
 
-// Process all kinds of commands
-void SmartControllerClass::ProcessCommands()
-{
+// Process Local bridge commands
+void SmartControllerClass::ProcessLocalCommands() {
 	// Check RF Message
 	theRadio.PeekMessage();
 
@@ -547,11 +548,18 @@ void SmartControllerClass::ProcessCommands()
 	// Process Console Command
   theConsole.processCommand();
 
-	// Process ASR Command
-	theASR.processCommand();
-
 	// Process BLE commands
   theBLE.processCommand();
+}
+
+// Process all kinds of commands
+void SmartControllerClass::ProcessCommands()
+{
+	// Process Local Bridge Commands
+	ProcessLocalCommands();
+
+	// Process ASR Command
+	theASR.processCommand();
 
 	// Process Cloud Commands
 	ProcessCloudCommands();
@@ -791,13 +799,13 @@ int SmartControllerClass::CldSetCurrentTime(String tmStr)
 int SmartControllerClass::CldPowerSwitch(String swStr)
 {
 	//fast, simple control
-	UC bytDev = 1;		// Default value
+	UC bytDev = CURRENT_DEVICE;		// Default value
 	UC blnOn;
 	swStr.toLowerCase();
 	int nPos = swStr.indexOf(':');
 	if( nPos > 0 ) {
 		bytDev = (uint8_t)(swStr.substring(0, nPos).toInt());
-		if( bytDev > NODEID_MAX_DEVCIE ) return 1;
+		if( IS_NOT_DEVICE_NODEID(bytDev) && !IS_GROUP_NODEID(bytDev) && bytDev != NODEID_DUMMY ) return 0;
 	}
 	String strOn = swStr.substring(nPos + 1);
 	if(strOn == "0" || strOn == "off") {
@@ -907,12 +915,18 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 		else if (_cmd == CMD_QUERY) {
 			if ((*m_jpCldCmd).containsKey("nd")) {
 				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
-				UC ring_id = RING_ID_ALL;
-				if( (*m_jpCldCmd).containsKey("Ring") ) {
-					ring_id = (UC)(*m_jpCldCmd)["Ring"].as<int>();
-					if( ring_id > MAX_RING_NUM ) ring_id = RING_ID_ALL;
+				if( (*m_jpCldCmd).containsKey("reset") ) {
+					if( (*m_jpCldCmd)["reset"].as<int>() == 1 ) {
+						return RebootNode((uint8_t)node_id);
+					}
+				} else {
+					UC ring_id = RING_ID_ALL;
+					if( (*m_jpCldCmd).containsKey("Ring") ) {
+						ring_id = (UC)(*m_jpCldCmd)["Ring"].as<int>();
+						if( ring_id > MAX_RING_NUM ) ring_id = RING_ID_ALL;
+					}
+					return QueryDeviceStatus((UC)node_id, ring_id);
 				}
-				return QueryDeviceStatus((UC)node_id, ring_id);
 			}
 		}
 		//COMMAND 7: Special effect
@@ -921,6 +935,19 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
 				const int filter_id = ((*m_jpCldCmd).containsKey("filter") ? (*m_jpCldCmd)["filter"].as<int>() : 0);
 				String strCmd = String::format("%d:17:%d", node_id, filter_id);
+				return theRadio.ProcessSend(strCmd);
+			}
+		}
+		//COMMAND 8: Externed funcions of special node, e.g. Key Simulator (nd=129)
+		else if (_cmd == CMD_EXT) {
+			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("msg")) {
+				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+				const int msg_id = (*m_jpCldCmd)["msg"].as<int>();
+				const int ack_flag = ((*m_jpCldCmd).containsKey("ack") ? (*m_jpCldCmd)["ack"].as<int>() : 0);
+				const int tag = ((*m_jpCldCmd).containsKey("tag") ? (*m_jpCldCmd)["tag"].as<int>() : 0);
+				String payl = ((*m_jpCldCmd).containsKey("pl") ? (*m_jpCldCmd)["pl"] : "");
+				// nd;Remote-node-id(Orig=0);Msg;Ack;Type;Payload\n
+				String strCmd = String::format("%d;0;%d;%d;%d;%s", node_id, msg_id, ack_flag, tag, payl.c_str());
 				return theRadio.ProcessSend(strCmd);
 			}
 		}
@@ -2104,11 +2131,11 @@ BOOL SmartControllerClass::FindCurrentDevice()
 
 ListNode<DevStatusRow_t> *SmartControllerClass::FindDevice(UC _nodeID)
 {
-	ListNode<DevStatusRow_t> *DevStatusRowPtr = NULL;
-	if( IS_CURRENT_DEVICE(_nodeID) ) {
-		DevStatusRowPtr = m_pMainDev;
-	} else {
-		DevStatusRowPtr = SearchDevStatus(_nodeID);
+	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
+	if( DevStatusRowPtr == NULL ) {
+		if( IS_CURRENT_DEVICE(_nodeID) ) {
+			DevStatusRowPtr = m_pMainDev;
+		}
 	}
 	return DevStatusRowPtr;
 }
@@ -2137,7 +2164,12 @@ UC SmartControllerClass::GetDevOnOff(UC _nodeID)
 	//(m_pMainDev->data.ring[0].BR < BR_MIN_VALUE ? true : !m_pMainDev->data.ring[0].State);
 	//return(thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF);
 	UC _st;
-	ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
+	ListNode<DevStatusRow_t> *DevStatusRowPtr;
+	if( IS_NOT_DEVICE_NODEID(_nodeID) ) {
+		DevStatusRowPtr = NULL;
+	} else {
+		DevStatusRowPtr = FindDevice(_nodeID);
+ 	}
 	if (DevStatusRowPtr) {
 		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? DEVICE_SW_OFF : DevStatusRowPtr->data.ring[0].State);
 	} else {
@@ -2148,14 +2180,19 @@ UC SmartControllerClass::GetDevOnOff(UC _nodeID)
 
 UC SmartControllerClass::GetDevBrightness(UC _nodeID)
 {
-	 //return((UC)thePanel.GetDimmerValue());
-	 UC _br;
-	 ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
-	 if (DevStatusRowPtr) {
-		 _br = DevStatusRowPtr->data.ring[0].BR;
-	 } else {
-		 _br = (UC)thePanel.GetDimmerValue();
-	 }
+	//return((UC)thePanel.GetDimmerValue());
+	UC _br;
+	ListNode<DevStatusRow_t> *DevStatusRowPtr;
+	if( IS_NOT_DEVICE_NODEID(_nodeID) ) {
+		DevStatusRowPtr = NULL;
+	} else {
+		DevStatusRowPtr = FindDevice(_nodeID);
+	}
+	if (DevStatusRowPtr) {
+		_br = DevStatusRowPtr->data.ring[0].BR;
+	} else {
+		_br = (UC)thePanel.GetDimmerValue();
+	}
 	return _br;
 }
 
@@ -2163,7 +2200,12 @@ US SmartControllerClass::GetDevCCT(UC _nodeID)
 {
 	//return (US)thePanel.GetCCTValue(false);
 	US _cct;
-	ListNode<DevStatusRow_t> *DevStatusRowPtr = FindDevice(_nodeID);
+	ListNode<DevStatusRow_t> *DevStatusRowPtr;
+	if( IS_NOT_DEVICE_NODEID(_nodeID) ) {
+		DevStatusRowPtr = NULL;
+	} else {
+		DevStatusRowPtr = FindDevice(_nodeID);
+	}
 	if (DevStatusRowPtr) {
 		_cct = DevStatusRowPtr->data.ring[0].CCT;
 	} else {
@@ -2225,21 +2267,23 @@ US SmartControllerClass::VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devT
 
 BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID)
 {
-	BOOL rc = false, _st;
+	BOOL rc, _st;
 	ListNode<DevStatusRow_t> *DevStatusRowPtr;
-	if( IS_CURRENT_DEVICE(_nodeID) ) {
-		DevStatusRowPtr = m_pMainDev;
+	if( IS_NOT_DEVICE_NODEID(_nodeID) ) {
+		DevStatusRowPtr = NULL;
 	} else {
-		DevStatusRowPtr = SearchDevStatus(_nodeID);
-	}
+		DevStatusRowPtr = FindDevice(_nodeID);
+ 	}
 	if (DevStatusRowPtr) {
 		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? true : !DevStatusRowPtr->data.ring[0].State);
-		rc = DevSoftSwitch(_st, _nodeID);
-		// Wait for confirmation or not
-		if( !rc ) {
-			// no need to wait
-			ConfirmLampOnOff(_nodeID, _st);
-		}
+	} else {
+		_st = thePanel.GetRingOnOff() ? DEVICE_SW_OFF : DEVICE_SW_ON;
+	}
+	rc = DevSoftSwitch(_st, _nodeID);
+	// Wait for confirmation or not
+	if( !rc ) {
+		// no need to wait
+		ConfirmLampOnOff(_nodeID, _st);
 	}
 	return rc;
 }
@@ -2641,60 +2685,59 @@ BOOL SmartControllerClass::QueryDeviceStatus(UC _nodeID, UC _ringID)
 {
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
-		StaticJsonBuffer<256> jBuf;
-		JsonObject *jroot;
-		char buffer[256];
-		jroot = &(jBuf.createObject());
-		if( jroot->success() ) {
-			(*jroot)["nd"] = DevStatusRowPtr->data.node_id;
-			(*jroot)["tp"] = DevStatusRowPtr->data.type;
-			if( !DevStatusRowPtr->data.present ) {
-				(*jroot)["up"] = 0;
-			} else {
-				if(DevStatusRowPtr->data.filter > 0)(*jroot)["filter"] = DevStatusRowPtr->data.filter;
-				if( IS_SUNNY(DevStatusRowPtr->data.type) ) {
-					(*jroot)["State"] = DevStatusRowPtr->data.ring[0].State;
-					(*jroot)["BR"] = DevStatusRowPtr->data.ring[0].BR;
-					(*jroot)["CCT"] = DevStatusRowPtr->data.ring[0].CCT;
-					jroot->printTo(buffer, 256);
-					return PublishDeviceStatus(buffer);
-				} else if( IS_RAINBOW(DevStatusRowPtr->data.type) || IS_MIRAGE(DevStatusRowPtr->data.type) ) {
-					UC r_index;
-					BOOL _bMore = false;
-					do {
-						if( _ringID > MAX_RING_NUM ) {
-							_bMore = false;
-							break;
-						}
-						if( _ringID == RING_ID_ALL ) {
-							r_index = 0;
-							if( IsAllRingHueSame(DevStatusRowPtr) ) {
-								(*jroot)["Ring"] = RING_ID_ALL;
-							} else {
-								(*jroot)["Ring"] = RING_ID_1;
-								_bMore = true;
-								_ringID = RING_ID_2;	// Next
-							}
-						} else {
-							r_index = _ringID - 1;
-							(*jroot)["Ring"] = RING_ID_1;
-							if( _bMore ) _ringID++;
-						}
-						(*jroot)["State"] = DevStatusRowPtr->data.ring[r_index].State;
-						(*jroot)["BR"] = DevStatusRowPtr->data.ring[r_index].BR;
-						(*jroot)["W"] = DevStatusRowPtr->data.ring[r_index].CCT % 256;
-						(*jroot)["R"] = DevStatusRowPtr->data.ring[r_index].R;
-						(*jroot)["G"] = DevStatusRowPtr->data.ring[r_index].G;
-						(*jroot)["B"] = DevStatusRowPtr->data.ring[r_index].B;
-						jroot->printTo(buffer, 256);
-						PublishDeviceStatus(buffer);
-					} while(_bMore);
-				}
+		String strTemp = String::format("{'nd':%d,'tp':%d", DevStatusRowPtr->data.node_id, DevStatusRowPtr->data.type);
+		if( !DevStatusRowPtr->data.present ) {
+			strTemp += ",'up':0}";
+			return PublishDeviceStatus(strTemp.c_str());
+		} else {
+			if(DevStatusRowPtr->data.filter > 0) {
+				strTemp += String::format(",'filter':%d", DevStatusRowPtr->data.filter);
 			}
-			return true;
+			if( IS_SUNNY(DevStatusRowPtr->data.type) ) {
+				strTemp += String::format(",'State':%d,'BR':%d,'CCT':%d}", DevStatusRowPtr->data.ring[0].State,
+						DevStatusRowPtr->data.ring[0].BR, DevStatusRowPtr->data.ring[0].CCT);
+				return PublishDeviceStatus(strTemp.c_str());
+			} else if( IS_RAINBOW(DevStatusRowPtr->data.type) || IS_MIRAGE(DevStatusRowPtr->data.type) ) {
+				UC r_index;
+				BOOL _bMore = false;
+				String strRow;
+				do {
+					if( _ringID > MAX_RING_NUM ) {
+						_bMore = false;
+						break;
+					}
+					strRow = strTemp;
+					if( _ringID == RING_ID_ALL ) {
+						r_index = 0;
+						if( IsAllRingHueSame(DevStatusRowPtr) ) {
+							strRow += String::format(",'Ring':%d", RING_ID_ALL);
+						} else {
+							strRow += String::format(",'Ring':%d", RING_ID_1);
+							_bMore = true;
+							_ringID = RING_ID_2;	// Next
+						}
+					} else {
+						r_index = _ringID - 1;
+						strRow += String::format(",'Ring':%d", _ringID);
+						if( _bMore ) _ringID++;
+					}
+					strRow += String::format(",'State':%d,'BR':%d,'W':%d,'R':%d,'G':%d,'B':%d}",
+							DevStatusRowPtr->data.ring[r_index].State, DevStatusRowPtr->data.ring[r_index].BR,
+							DevStatusRowPtr->data.ring[r_index].CCT, DevStatusRowPtr->data.ring[r_index].R,
+							DevStatusRowPtr->data.ring[r_index].G, DevStatusRowPtr->data.ring[r_index].B);
+					PublishDeviceStatus(strRow.c_str());
+				} while(_bMore);
+			}
 		}
+		return true;
 	}
 	return false;
+}
+
+BOOL SmartControllerClass::RebootNode(UC _nodeID)
+{
+	String strCmd = String::format("%d:1", _nodeID);
+	return theRadio.ProcessSend(strCmd);
 }
 
 BOOL SmartControllerClass::IsAllRingHueSame(ListNode<DevStatusRow_t> *pDev)

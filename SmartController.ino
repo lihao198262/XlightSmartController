@@ -47,6 +47,7 @@
 #include "xlSmartController.h"
 #include "xlxSerialConsole.h"
 #include "SparkIntervalTimer.h"
+#include "xlxBLEInterface.h"
 
 //------------------------------------------------------------------
 // Program Body Begins Here
@@ -65,6 +66,7 @@ IntervalTimer sysTimer;
 void SysteTimerCB()
 {
 	static UC fastTick = 0;				// must be static
+	static UC slowTick = 0;				// must be static
 
   // Change Status Indicator according to system status
   // e.g: fast blink, slow blink, breath, etc
@@ -79,13 +81,23 @@ void SysteTimerCB()
 	}
 
 	// Timeout interuption of Cloud connecting
-#ifndef SYS_SERIAL_DEBUG
+//#ifndef SYS_SERIAL_DEBUG
 	if( WiFi.listening() ) {
-		// Get Wi-Fi credential from BLE
-		// ToDo:...
+		if (++slowTick > RTE_DELAY_SYSTIMER) {
+			slowTick = 0;
+			//SERIAL_LN("Wi-Fi in listening mode...");
+			// Get Wi-Fi credential from BLE
+			theSys.ProcessLocalCommands();
+			/*if( WiFi.hasCredentials() ) {
+				//WiFi.listen(false);
+				//theSys.ResetSerialPort();
+				SERIAL_LN("will connect Wi-Fi in system thread");
+				//theSys.connectWiFi();
+			}*/
+		}
 		// Reset?
 	}
-#endif
+//#endif
 }
 
 // Set "manual" mode
@@ -96,6 +108,7 @@ void setup()
 {
 	// Open Wi-Fi
 	WiFi.on();
+	WiFi.listen(false);
 
   // System Initialization
   theSys.Init();
@@ -110,11 +123,16 @@ void setup()
   // Initialize Pins
   theSys.InitPins();
 
+	// Initialization Radio Interfaces
+	theSys.InitRadio();
+
+	// Initialize Serial Console
+  theConsole.Init();
+
   // Start system timer: callback every n * 0.5ms using hmSec timescale
   //Use TIMER6 to retain PWM capabilities on all pins
   sysTimer.begin(SysteTimerCB, RTE_DELAY_SYSTIMER, hmSec, TIMER6);
 
-	WiFi.listen(false);
 	while(1) {
 		if( !WiFi.hasCredentials() || !theConfig.GetWiFiStatus() ) {
 			if( !theSys.connectWiFi() ) {
@@ -126,6 +144,7 @@ void setup()
 		}
 
 		// Connect to Wi-Fi
+		SERIAL_LN("will connect WiFi");
 		if( theSys.connectWiFi() ) {
 			if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
 				Particle.disconnect();
@@ -147,9 +166,6 @@ void setup()
 		break;
 	}
 
-	// Initialization Radio Interfaces
-	theSys.InitRadio();
-
   // Initialization network Interfaces
   theSys.InitNetwork();
 
@@ -162,9 +178,6 @@ void setup()
 
   // Initialize Sensors
   theSys.InitSensors();
-
-	// Initialize Serial Console
-  theConsole.Init();
 
   // System Starts
   theSys.Start();

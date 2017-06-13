@@ -333,7 +333,6 @@ public:
   void SetNIDChanged(BOOL flag);
 
   UC GetVersion();
-  BOOL SetVersion(UC ver);
 
   US GetTimeZoneID();
   BOOL SetTimeZoneID(US tz);

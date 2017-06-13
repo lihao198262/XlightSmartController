@@ -581,16 +581,6 @@ UC ConfigClass::GetVersion()
   return m_config.version;
 }
 
-BOOL ConfigClass::SetVersion(UC ver)
-{
-  if( ver != m_config.version )
-  {
-    m_config.version = ver;
-    m_isChanged = true;
-  }
-	return true;
-}
-
 US ConfigClass::GetTimeZoneID()
 {
   return m_config.timeZone.id;

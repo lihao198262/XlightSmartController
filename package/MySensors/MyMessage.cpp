@@ -359,6 +359,14 @@ MyMessage& MyMessage::set(uint64_t value) {
 	return *this;
 }
 
+MyMessage& MyMessage::set(uint64_t value1, uint64_t value2) {
+	miSetPayloadType(P_ULONG32);
+	miSetLength(16);
+	msg.payload.ui64Pair[0] = value1;
+	msg.payload.ui64Pair[1] = value2;
+	return *this;
+}
+
 MyMessage& MyMessage::set(uint8_t flag, uint8_t value) {
 	miSetLength(2);
 	miSetPayloadType(P_BYTE);

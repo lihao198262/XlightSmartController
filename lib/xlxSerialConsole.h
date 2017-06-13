@@ -51,6 +51,7 @@ public:
 
   bool SetupWiFi(const char *cmd);
   bool SetWiFiCredential(const char *cmd);
+  void UpdateWiFiCredential();
   bool PingAddress(const char *sAddress);
   bool String2IP(const char *sAddress, IPAddress &ipAddr);
 
@@ -65,5 +66,9 @@ private:
 // Function & Class Helper
 //------------------------------------------------------------------
 extern SerialConsoleClass theConsole;
+extern String gstrWiFi_SSID;
+extern String gstrWiFi_Password;
+extern uint8_t gintWiFi_Auth;
+extern uint8_t gintWiFi_Cipher;
 
 #endif /* xlxSerialConsole_h */

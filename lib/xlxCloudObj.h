@@ -16,6 +16,7 @@
 // Notes: Variable name max length is 12 characters long.
 // Cloud variables
 #define CLV_SysID               "sysID"           // Can also be a Particle Object
+#define CLV_AppVersion          "appVersion"      // Can also be a Particle Object
 #define CLV_TimeZone            "timeZone"        // Can also be a Particle Object
 #define CLV_SysStatus           "sysStatus"       // Can also be a Particle Object
 #define CLV_JSONData            "jsonData"        // Can also be a Particle Object
@@ -67,6 +68,7 @@ public:
   // Variables should be defined as public
   String m_SysID;
   String m_SysVersion;    // firmware version
+  int m_nAppVersion;
   int m_SysStatus;
   String m_tzString;
   String m_jsonData;

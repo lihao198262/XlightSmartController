@@ -58,6 +58,7 @@ public:
   BOOL connectCloud();
 
   // Process all kinds of commands
+  void ProcessLocalCommands();
   void ProcessCommands();
   void ProcessCloudCommands();
   void CollectData(UC tick);
@@ -139,6 +140,7 @@ public:
   BOOL ConfirmLampFilter(UC _nodeID, UC _filter);
   BOOL ConfirmLampPresent(ListNode<DevStatusRow_t> *pDev, bool _up);
   BOOL QueryDeviceStatus(UC _nodeID, UC _ringID = RING_ID_ALL);
+  BOOL RebootNode(UC _nodeID);
   BOOL IsAllRingHueSame(ListNode<DevStatusRow_t> *pDev);
 
   // Utils

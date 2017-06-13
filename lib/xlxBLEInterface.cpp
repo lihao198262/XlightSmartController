@@ -33,6 +33,7 @@
 #include "xlxLogger.h"
 #include "MyParserSerial.h"
 #include "xlxRF24Server.h"
+#include "xlxSerialConsole.h"
 
 #define BLE_CHIP_HC05             5
 #define BLE_CHIP_HC06             6
@@ -339,6 +340,7 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
     UC _sensor, _msgType, _cmd, _nodeID;
   	bool _bIsAck, _needAck;
   	char *payload;
+    String strCmd;
 
     _cmd = lv_msg.getCommand();
     _nodeID = lv_msg.getDestination();
@@ -375,15 +377,71 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
       } else if( _msgType == I_CONFIG && _needAck ) {
         // Config Controller
         if( _sensor == NODEID_SMARTPHONE ) {
-          // ToDo: set Wi-Fi: SSID, security and Password
-          // ToDo: set cloud option: Serial command
-          // ToDo: set base on/off: Serial command
+          if( payload[0] == '0' ) {
+            // Wi-Fi(0):SSID:Password:Auth:Cipher
+            // Auth: WEP=1, WPA=2, WPA2=3
+            // Cipher: WLAN_CIPHER_AES=1, WLAN_CIPHER_TKIP=2, WLAN_CIPHER_AES_TKIP=3
+            gintWiFi_Auth = 0;
+            gintWiFi_Cipher = 0;
+            char *token, *last;
+            token = strtok_r(payload, ":", &last);
+            if( token ) {
+              token = strtok_r(NULL, ":", &last);
+              if( token ) {
+                gstrWiFi_SSID = token;
+                gstrWiFi_Password = "";
+                token = strtok_r(NULL, ":", &last);
+                if( token ) {
+                  gstrWiFi_Password = token;
+                  token = strtok_r(NULL, ":", &last);
+                  if( token ) {
+                    gintWiFi_Auth = atoi(token);
+                    if( gintWiFi_Auth > 3 || gintWiFi_Auth < 0 ) {
+                      gintWiFi_Auth = 0;
+                    } else {
+                      token = strtok_r(NULL, ":", &last);
+                      if( token ) {
+                        gintWiFi_Cipher = atoi(token);
+                        if( gintWiFi_Cipher > 3 || gintWiFi_Cipher < 0 ) {
+                          gintWiFi_Cipher = 0;
+                        }
+                      }
+                    }
+                  }
+                }
+
+                theConsole.UpdateWiFiCredential();
+
+                strCmd = String::format("%d;0;3;2;6;1:0:%s\n", NODEID_SMARTPHONE, theSys.GetSysID().c_str());
+                sendCommand(strCmd);
+
+                WiFi.listen(false);
+                theSys.connectWiFi();
+              }
+            } else {
+              strCmd = String::format("%d;0;3;2;6;0:0\n", NODEID_SMARTPHONE);
+              sendCommand(strCmd);
+            }
+          } else if( payload[0] == '1' ) {
+            // Query CoreID
+            strCmd = String::format("%d;0;3;2;6;1:1:%s\n", NODEID_SMARTPHONE, theSys.GetSysID().c_str());
+            sendCommand(strCmd);
+          }else {
+            // serial set command
+            strCmd = String::format("set %s", payload);
+            theConsole.ExecuteCloudCommand(strCmd.c_str());
+
+            strCmd = String::format("%d;0;3;2;6;1:%s\n", NODEID_SMARTPHONE, payload);
+            sendCommand(strCmd);
+          }
         }
       } else if( _msgType == I_REBOOT ) {
         if( _sensor == NODEID_SMARTPHONE ) {
-          // ToDo: reboot Controller or Node
-          // ToDo: DFU
-          // ToDo: update and reboot Controller
+          strCmd = String::format("%d;0;3;2;13;1:%s\n", NODEID_SMARTPHONE, payload);
+          sendCommand(strCmd);
+
+          strCmd = String::format("sys %s", payload);
+          theConsole.ExecuteCloudCommand(strCmd.c_str());
         }
       }
       break;

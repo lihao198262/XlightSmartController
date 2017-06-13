@@ -248,6 +248,7 @@ typedef union
 	unsigned int uiValue;
 	int iValue;
 	uint64_t ui64Value;
+	uint64_t ui64Pair[2];
 	struct { // Float messages
 		float fValue;
 		uint8_t fPrecision;   // Number of decimals when serializing
@@ -350,6 +351,7 @@ public:
 	MyMessage& set(unsigned int value);
 	MyMessage& set(int value);
 	MyMessage& set(uint64_t value);
+	MyMessage& set(uint64_t value1, uint64_t value2);
 	MyMessage& set(uint8_t flag, uint8_t value);
 	MyMessage& set(uint8_t flag, unsigned int value);
 

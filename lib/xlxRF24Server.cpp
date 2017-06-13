@@ -146,31 +146,29 @@ bool RF24ServerClass::ProcessSend(const UC _node, const UC _msgID, String &strPa
 		break;
 
 	case 1:   // Request new node ID
-		if (getAddress() == GATEWAY_ADDRESS) {
-			if( _node == GATEWAY_ADDRESS ) {
-				SERIAL_LN("Controller can not request node ID\n\r");
+		if( _node == GATEWAY_ADDRESS ) {
+			SERIAL_LN("Controller can not request node ID\n\r");
+		} else {
+			// Set specific NodeID to node
+			UC newID = 0;
+			if( strPayl.length() > 0 ) {
+				newID = (UC)strPayl.toInt();
+			}
+			if( newID > 0 ) {
+				lv_msg.build(getAddress(), _node, newID, C_INTERNAL, I_ID_RESPONSE, false, true);
+				lv_msg.set(getMyNetworkID());
+				//theConfig.lstNodes.clearNodeId(_node);
+				SERIAL("Now sending new id:%d to node:%d...", newID, _node);
+				bMsgReady = true;
 			} else {
-				// Set specific NodeID to node
-				UC newID = _node;
-				if( strPayl.length() > 0 ) {
-					newID = (UC)strPayl.toInt();
-				}
-				if( newID > 0 ) {
-					lv_msg.build(getAddress(), _node, newID, C_INTERNAL, I_ID_RESPONSE, false, true);
-					lv_msg.set(getMyNetworkID());
+				// Reboot node
+				ListNode<DevStatusRow_t> *DevStatusRowPtr = theSys.SearchDevStatus(_node);
+				if( DevStatusRowPtr ) {
+					lv_msg.build(getAddress(), _node, GATEWAY_ADDRESS, C_INTERNAL, I_REBOOT, false);
+					lv_msg.set((unsigned int)DevStatusRowPtr->data.token);
 					bMsgReady = true;
-					//theConfig.lstNodes.clearNodeId(_node);
-					SERIAL("Now sending new id:%d to node:%d...", newID, _node);
 				}
 			}
-		}
-		else {
-			UC deviceType = (getAddress() == 3 ? NODE_TYP_REMOTE : NODE_TYP_LAMP);
-			ChangeNodeID(AUTO);
-			lv_msg.build(AUTO, BASESERVICE_ADDRESS, deviceType, C_INTERNAL, I_ID_REQUEST, false);
-			lv_msg.set(GetNetworkID(true));		// identity: could be MAC, serial id, etc
-			bMsgReady = true;
-			SERIAL("Now sending request node id message...");
 		}
 		break;
 
@@ -412,18 +410,25 @@ void RF24ServerClass::ConvertRepeatMsg(MyMessage *pMsg)
 	if( pMsg->getCommand() == C_SET ) {
 		uint8_t *payload = (uint8_t *)pMsg->getCustom();
 		uint8_t bytValue = payload[0];
+		uint8_t _destNode;
+		if( pMsg->getDestination() == BROADCAST_ADDRESS || IS_GROUP_NODEID(pMsg->getDestination()) ) {
+			_destNode = CURRENT_DEVICE;
+		} else {
+			_destNode = pMsg->getDestination();
+		}
 		if( pMsg->getType() == V_STATUS && bytValue == DEVICE_SW_TOGGLE ) {
-			bytValue = 1 - theSys.GetDevOnOff(CURRENT_DEVICE);
+			bytValue = 1 - theSys.GetDevOnOff(_destNode);
 			pMsg->set(bytValue);
 		} else if( pMsg->getType() == V_PERCENTAGE && pMsg->getLength() == 2 ) {
 			if( bytValue != OPERATOR_SET ) {
 				payload[0] = OPERATOR_SET;
+				uint8_t _br = theSys.GetDevBrightness(_destNode);
 				if( bytValue == OPERATOR_ADD ) {
-					payload[1] += theSys.GetDevBrightness(CURRENT_DEVICE);
+					payload[1] += _br;
 					if( payload[1] > 100 ) payload[1] = 100;
 				} else if( bytValue == OPERATOR_SUB ) {
-					if( theSys.GetDevBrightness(CURRENT_DEVICE) > payload[1] + BR_MIN_VALUE ) {
-						payload[1] = theSys.GetDevBrightness(CURRENT_DEVICE) - payload[1];
+					if( _br > payload[1] + BR_MIN_VALUE ) {
+						payload[1] = _br - payload[1];
 					} else {
 						payload[1] = BR_MIN_VALUE;
 					}
@@ -431,7 +436,7 @@ void RF24ServerClass::ConvertRepeatMsg(MyMessage *pMsg)
 			}
 		} else if( pMsg->getType() == V_LEVEL && pMsg->getLength() == 3 ) {
 			if( bytValue != OPERATOR_SET ) {
-				uint16_t _CCTValue = theSys.GetDevCCT(CURRENT_DEVICE);
+				uint16_t _CCTValue = theSys.GetDevCCT(_destNode);
 				uint16_t _deltaValue = payload[2] * 256 + payload[1];
 				payload[0] = OPERATOR_SET;
 				if( bytValue == OPERATOR_ADD ) {
@@ -541,7 +546,7 @@ bool RF24ServerClass::ProcessReceiveMQ()
 	        /// Send response message
 	        msg.build(getAddress(), replyTo, newID, C_INTERNAL, I_ID_RESPONSE, false, true);
 					if( newID > 0 ) {
-		        msg.set(getMyNetworkID());
+		        msg.set(getMyNetworkID(), nIdentity);
 		        LOGN(LOGTAG_EVENT, "Allocated NodeID:%d type:%c to %s", newID, cNodeType, PrintUint64(strDisplay, nIdentity));
 					} else {
 						LOGW(LOGTAG_MSG, "Failed to allocate NodeID type:%c to %s", cNodeType, PrintUint64(strDisplay, nIdentity));
@@ -600,7 +605,7 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							theSys.UpdateNoise(replyTo, _iValue);
 						}
 					} else if( _sensor == S_DUST || _sensor == S_AIR_QUALITY || _sensor == S_SMOKE ) {
-						if( msgType == V_LIGHT_LEVEL) { // Dust, Gas or Smoke
+						if( msgType == V_LEVEL) { // Dust, Gas or Smoke
 							_iValue = payload[1] * 256 + payload[0];
 							if( _sensor == S_DUST ) {
 								theSys.UpdateDust(replyTo, _iValue);
@@ -685,6 +690,11 @@ bool RF24ServerClass::ProcessReceiveMQ()
 						msg.getSerialString(strDisplay);
 						if( theBLE.isGood() ) theBLE.sendCommand(strDisplay);
 					}
+				} else if( _sensor == NODEID_KEYSIMULATOR ) {
+					// Transfer message to Key Simuluator, use msgType to identify target device
+					msg.build(getAddress(), NODEID_KEYSIMULATOR, replyTo, C_SET, msgType, _needAck, _bIsAck, true);
+					// Keep payload unchanged
+					msgReady = true;
 				} else {
 					transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
 					if( transTo > 0 ) {
