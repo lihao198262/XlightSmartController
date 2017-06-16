@@ -149,7 +149,7 @@ bool xlPanelClass::ProcessEncoder()
         break;
       case BUTTON_CLICKED:
         LOGD(LOGTAG_ACTION, "Button Clicked");
-        theSys.ToggleLampOnOff(CURRENT_DEVICE);
+        theSys.ToggleLampOnOff(CURRENT_DEVICE, CURRENT_SUBDEVICE);
         // Clear CCT flag, but don't need to change HC595, cuz the toggle function will do it
         //SetCCTFlag(false);
         m_bCCTFlag = false;

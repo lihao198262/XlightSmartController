@@ -46,7 +46,7 @@ uint8_t MyMessage::getSender() const {
 }
 
 uint8_t MyMessage::getLast() const {
-	return msg.header.sender;
+	return msg.header.last;
 }
 
 uint8_t MyMessage::getType() const {
@@ -389,9 +389,15 @@ char* MyMessage::getSerialString(char *buffer) const {
 	if (buffer != NULL) {
 		char payl[MAX_PAYLOAD*2+1];
 
-		sprintf(buffer, "%d;%d;%d;%d;%d;%s\n",
-		  msg.header.destination, msg.header.sensor, miGetCommand(),
-			(miGetAck() ? 2 : miGetRequestAck()), msg.header.type, getString(payl));
+		if( msg.header.sensor > 0 ) {
+			sprintf(buffer, "%d-%d;%d;%d;%d;%d;%s\n",
+			  msg.header.destination, msg.header.sensor, msg.header.sender, miGetCommand(),
+				(miGetAck() ? 2 : miGetRequestAck()), msg.header.type, getString(payl));
+		} else {
+			sprintf(buffer, "%d;%d;%d;%d;%d;%s\n",
+			  msg.header.destination, msg.header.sender, miGetCommand(),
+				(miGetAck() ? 2 : miGetRequestAck()), msg.header.type, getString(payl));
+		}
 		return buffer;
 	}
 
@@ -407,7 +413,9 @@ char* MyMessage::getJsonString(char *buffer) const {
 		jroot = &(jBuf.createObject());
 		if( jroot->success() ) {
 	    (*jroot)["nd"] = msg.header.destination;
-			(*jroot)["sen"] = msg.header.sensor;
+			(*jroot)["ori"] = msg.header.sender;
+			if( msg.header.sensor > 0 )
+				(*jroot)["sen"] = msg.header.sensor;
 			(*jroot)["cmd"] = miGetCommand();
 			(*jroot)["ack"] = (miGetAck() ? 2 : miGetRequestAck());
 			(*jroot)["typ"] = msg.header.type;

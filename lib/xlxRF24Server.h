@@ -17,11 +17,12 @@ public:
   uint64_t GetNetworkID(bool _full = false);
   void SetRole_Gateway();
   bool ChangeNodeID(const uint8_t bNodeID);
-  bool ProcessSend(const UC _node, const UC _msgID, String &strPayl, MyMessage &my_msg, const UC _replyTo);
-  bool ProcessSend(String &strMsg, MyMessage &my_msg, const UC _replyTo = 0);
-  bool ProcessSend(String &strMsg, const UC _replyTo = 0); //overloaded
+  bool ProcessSend(const UC _node, const UC _msgID, String &strPayl, MyMessage &my_msg, const UC _replyTo, const UC _sensor = 0);
+  bool ProcessSend(String &strMsg, MyMessage &my_msg, const UC _replyTo = 0, const UC _sensor = 0);
+  bool ProcessSend(String &strMsg, const UC _replyTo = 0, const UC _sensor = 0); //overloaded
   bool ProcessSend(MyMessage *pMsg = NULL);
   bool SendNodeConfig(UC _node, UC _ncf, unsigned int _value);
+  bool SendNodeConfig(UC _node, UC _ncf, UC *_data, const UC _len);
 
   bool ProcessMQ();
   bool ProcessSendMQ();

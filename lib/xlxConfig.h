@@ -20,6 +20,7 @@
 #define PACK //MSVS intellisense doesn't work when structs are packed
 
 #define CURRENT_DEVICE              (theConfig.GetMainDeviceID())
+#define CURRENT_SUBDEVICE           (theConfig.GetSubDeviceID())
 #define IS_CURRENT_DEVICE(nid)      ((nid) == CURRENT_DEVICE || CURRENT_DEVICE == NODEID_DUMMY)
 
 // Maximum items in AST scenario table
@@ -64,7 +65,8 @@ typedef struct
   UC ndMsgRtpTimes            :4;           // Node message repeat times
   UC Reserved_UC1[3];
   char ProductName[20];                     // Product name
-  UC Reserved_UC2[4];
+  UC subDevID;                              // SubID for main device
+  UC Reserved_UC2[3];
   char Token[64];                           // Token
   BOOL enableCloudSerialCmd   :1;           // Whether enable cloud serial command
   BOOL enableDailyTimeSync    :1;           // Whether enable daily time synchronization
@@ -387,6 +389,8 @@ public:
 
   UC GetMainDeviceID();
   BOOL SetMainDeviceID(UC devID);
+  UC GetSubDeviceID();
+  BOOL SetSubDeviceID(UC devID);
 
   UC GetMainDeviceType();
   BOOL SetMainDeviceType(UC type);

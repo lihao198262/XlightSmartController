@@ -66,7 +66,7 @@ public:
   bool ProcessPanel();
 
   // Device Control Functions
-  int DevSoftSwitch(UC sw, UC dev = 0);
+  int DevSoftSwitch(UC sw, UC dev = 0, const UC subID = 0);
 
   // High speed system timer process
   void FastProcess();
@@ -126,12 +126,12 @@ public:
   US GetDevCCT(UC _nodeID);
 
   US VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devType, uint64_t _identity);
-  BOOL ToggleLampOnOff(UC _nodeID = NODEID_MAINDEVICE);
-  BOOL ChangeLampBrightness(UC _nodeID = NODEID_MAINDEVICE, UC _percentage = 50);
-  BOOL ChangeLampCCT(UC _nodeID = NODEID_MAINDEVICE, US _cct = 3000);
-  BOOL ChangeBR_CCT(UC _nodeID, UC _br, US _cct);
-  BOOL ChangeLampScenario(UC _nodeID, UC _scenarioID, UC _replyTo = 0);
-  BOOL RequestDeviceStatus(UC _nodeID);
+  BOOL ToggleLampOnOff(UC _nodeID = NODEID_MAINDEVICE, const UC subID = 0);
+  BOOL ChangeLampBrightness(UC _nodeID = NODEID_MAINDEVICE, UC _percentage = 50, const UC subID = 0);
+  BOOL ChangeLampCCT(UC _nodeID = NODEID_MAINDEVICE, US _cct = 3000, const UC subID = 0);
+  BOOL ChangeBR_CCT(UC _nodeID, UC _br, US _cct, const UC subID = 0);
+  BOOL ChangeLampScenario(UC _nodeID, UC _scenarioID, UC _replyTo = 0, const UC _sensor = 0);
+  BOOL RequestDeviceStatus(UC _nodeID, const UC subID = 0);
   BOOL ConfirmLampOnOff(UC _nodeID, UC _st);
   BOOL ConfirmLampBrightness(UC _nodeID, UC _st, UC _percentage, UC _ringID = RING_ID_ALL);
   BOOL ConfirmLampCCT(UC _nodeID, US _cct, UC _ringID = RING_ID_ALL);
@@ -140,7 +140,7 @@ public:
   BOOL ConfirmLampFilter(UC _nodeID, UC _filter);
   BOOL ConfirmLampPresent(ListNode<DevStatusRow_t> *pDev, bool _up);
   BOOL QueryDeviceStatus(UC _nodeID, UC _ringID = RING_ID_ALL);
-  BOOL RebootNode(UC _nodeID);
+  BOOL RebootNode(UC _nodeID, const UC subID = 0);
   BOOL IsAllRingHueSame(ListNode<DevStatusRow_t> *pDev);
 
   // Utils

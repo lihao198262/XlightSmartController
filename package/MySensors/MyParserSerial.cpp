@@ -33,17 +33,33 @@ bool MyParserSerial::parse(MyMessage &message, char *inputString) {
 	uint8_t command = 0;
 	uint8_t ack = 0;
 
+	message.setSender( GATEWAY_ADDRESS );
+	message.setLast( GATEWAY_ADDRESS );
+	message.setSensor(0);
+
 	// Extract command data coming on serial line
+	/// Contains subID?
+	bool _hasSubID = false;
+	str = strtok_r(inputString, "-", &p);
+	if( str ) {
+		_hasSubID = true;
+		message.setDestination((uint8_t)atoi(str));
+		str = strtok_r(NULL, ";", &p);
+		if( str ) {
+			message.setSensor((uint8_t)atoi(str));
+		}
+	}
+
 	for (str = strtok_r(inputString, ";", &p); // split using semicolon
 		str && i < 6; // loop while str is not null an max 5 times
 		str = strtok_r(NULL, ";", &p) // get subsequent tokens
 			) {
 		switch (i) {
 			case 0: // Radioid (destination)
-				message.setDestination((uint8_t)atoi(str));
+				if( !_hasSubID ) message.setDestination((uint8_t)atoi(str));
 				break;
-			case 1: // Childid
-				message.setSensor((uint8_t)atoi(str));
+			case 1: // Sender
+				message.setSender((uint8_t)atoi(str));
 				break;
 			case 2: // Command (message type)
 				command = atoi(str);
@@ -80,8 +96,6 @@ bool MyParserSerial::parse(MyMessage &message, char *inputString) {
 	if (i < 5)
 		return false;
 
-	message.setSender( GATEWAY_ADDRESS );
-	message.setLast( GATEWAY_ADDRESS );
 	if( ack == 2 ) {
 		mSetAck(message.msg, true);
 		mSetRequestAck(message.msg, false);
@@ -101,10 +115,17 @@ char* MyParserSerial::getSerialString(MyMessage &message, char *buffer) const {
 	if (buffer != NULL) {
 		char payl[MAX_PAYLOAD*2+1];
 
-		sprintf(buffer, "%d;%d;%d;%d;%d;%s\n",
-		  message.getDestination(), message.getSensor(),
-			mGetCommand(message.msg), mGetRequestAck(message.msg),
-			message.getType(),	message.getString(payl));
+		if( message.getSender() > 0 ) {
+			sprintf(buffer, "%d-%d;%d;%d;%d;%d;%s\n",
+				message.getDestination(), message.getSensor(), message.getSender(),
+				mGetCommand(message.msg), (mGetAck(message.msg) ? 2 : mGetRequestAck(message.msg)),
+				message.getType(),	message.getString(payl));
+		} else {
+			sprintf(buffer, "%d;%d;%d;%d;%d;%s\n",
+			  message.getDestination(), message.getSender(),
+				mGetCommand(message.msg), (mGetAck(message.msg) ? 2 : mGetRequestAck(message.msg)),
+				message.getType(),	message.getString(payl));
+		}
 		return buffer;
 	}
 

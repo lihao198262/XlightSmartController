@@ -325,6 +325,8 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
       SERIAL_LN("     , cloud option disable|enable|must");
       SERIAL_LN("e.g. set maindev <nodeid>");
       SERIAL_LN("     , to change the main device");
+      SERIAL_LN("e.g. set subid <subNID>");
+      SERIAL_LN("     , to change the sub NID");
       SERIAL_LN("e.g. set remote <nodeid device>");
       SERIAL_LN("     , to assign device to remote");
       SERIAL_LN("e.g. set blename <BLEName>");
@@ -338,7 +340,7 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
       SERIAL_LN("e.g. set debug [log:level]");
       SERIAL_LN("     , where log is [serial|flash|syslog|cloud|all");
       SERIAL_LN("     and level is [none|alter|critical|error|warn|notice|info|debug]\n\r");
-      //CloudOutput("set tz|dst|nodeid|base|spkr|flag|var|cloud|maindev|debug|blename|blepin");
+      //CloudOutput("set tz|dst|nodeid|base|spkr|flag|var|cloud|maindev|subid|debug|blename|blepin");
     }
   } else if(strTopic.equals("sys")) {
     SERIAL_LN("--- Command: sys <mode> ---");
@@ -517,7 +519,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
       SERIAL_LN("m_dust = \t\t\t%d", theSys.m_dust);
   		SERIAL_LN("m_motion = \t\t\t%s", (theSys.m_motion ? "true" : "false"));
       SERIAL_LN("");
-      SERIAL_LN("Main DeviceID = \t\t%d", CURRENT_DEVICE);
+      SERIAL_LN("Main DeviceID = \t\t%d-%d", CURRENT_DEVICE, CURRENT_SUBDEVICE);
       SERIAL_LN("typeMainDevice = \t\t%d", theConfig.GetMainDeviceType());
       SERIAL_LN("numDevices = \t\t\t%d", theConfig.GetNumDevices());
       SERIAL_LN("numNodes = \t\t\t%d", theConfig.GetNumNodes());
@@ -875,6 +877,15 @@ bool SerialConsoleClass::doSet(const char *cmd)
         retVal = true;
       } else {
         SERIAL_LN("Require a valid nodeID\n\r");
+        retVal = true;
+      }
+    } else if (strnicmp(sTopic, "subid", 5) == 0) {
+      // Sub device id
+      sParam1 = next();
+      if( sParam1) {
+        theConfig.SetSubDeviceID(atoi(sParam1));
+        SERIAL_LN("SubNID changed to %d\n\r", CURRENT_SUBDEVICE);
+        CloudOutput("sid:%d", CURRENT_SUBDEVICE);
         retVal = true;
       }
     } else if (strnicmp(sTopic, "remote", 6) == 0) {

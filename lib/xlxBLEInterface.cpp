@@ -337,13 +337,14 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
 {
   MyMessage lv_msg;
   if( serialMsgParser.parse(lv_msg, inputString) ) {
-    UC _sensor, _msgType, _cmd, _nodeID;
+    UC _sensor, _sender, _msgType, _cmd, _nodeID;
   	bool _bIsAck, _needAck;
   	char *payload;
     String strCmd;
 
     _cmd = lv_msg.getCommand();
     _nodeID = lv_msg.getDestination();
+    _sender = lv_msg.getSender();
     _sensor = lv_msg.getSensor();
 		_msgType = lv_msg.getType();
 		_bIsAck = lv_msg.isAck();
@@ -351,23 +352,23 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
 		payload = (char *)lv_msg.getCustom();
     char strDisplay[SENSORDATA_JSON_SIZE];
 
-    LOGD(LOGTAG_MSG, "BLECmd dest:%d cmd:%d type:%d sensor:%d ack:%d rack:%d",
-          _nodeID, _cmd, _msgType, _sensor, _bIsAck, _needAck);
+    LOGD(LOGTAG_MSG, "BLECmd dest:%d cmd:%d type:%d sender:%d sensor:%d ack:%d rack:%d",
+          _nodeID, _cmd, _msgType, _sender, _sensor, _bIsAck, _needAck);
 
     switch( _cmd ) {
       case C_INTERNAL:
       if( _msgType == I_ID_REQUEST && _needAck ) {
           // Login
-          if( _sensor == NODEID_PROJECTOR || _sensor == NODEID_SMARTPHONE ) {
+          if( _sender == NODEID_PROJECTOR || _sender == NODEID_SMARTPHONE ) {
             // Check Access code
-            lv_msg.build(_sensor, _sensor, NODEID_GATEWAY, C_INTERNAL, I_ID_RESPONSE, false, true);
+            lv_msg.build(NODEID_GATEWAY, _sender, _sensor, C_INTERNAL, I_ID_RESPONSE, false, true);
             if( theConfig.CheckPPTAccessCode(payload) ) {
               m_token = random(65535); // Random number
               lv_msg.set((unsigned int)m_token);
-              LOGD(LOGTAG_MSG, "%s login OK", _sensor == NODEID_PROJECTOR ? "PPTCtrl" : "APP");
+              LOGD(LOGTAG_MSG, "%s-%d login OK", _sender == NODEID_PROJECTOR ? "PPTCtrl" : "APP", _sensor);
             } else {
               lv_msg.set((unsigned int)0);
-              LOGI(LOGTAG_MSG, "%s login failed", _sensor == NODEID_PROJECTOR ? "PPTCtrl" : "APP");
+              LOGI(LOGTAG_MSG, "%s-%d login failed", _sender == NODEID_PROJECTOR ? "PPTCtrl" : "APP", _sensor);
             }
 						// Convert to serial format
 						memset(strDisplay, 0x00, sizeof(strDisplay));
@@ -376,7 +377,7 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
           }
       } else if( _msgType == I_CONFIG && _needAck ) {
         // Config Controller
-        if( _sensor == NODEID_SMARTPHONE ) {
+        if( _sender == NODEID_SMARTPHONE ) {
           if( payload[0] == '0' ) {
             // Wi-Fi(0):SSID:Password:Auth:Cipher
             // Auth: WEP=1, WPA=2, WPA2=3
@@ -436,7 +437,7 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
           }
         }
       } else if( _msgType == I_REBOOT ) {
-        if( _sensor == NODEID_SMARTPHONE ) {
+        if( _sender == NODEID_SMARTPHONE ) {
           strCmd = String::format("%d;0;3;2;13;1:%s\n", NODEID_SMARTPHONE, payload);
           sendCommand(strCmd);
 
@@ -449,11 +450,11 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
       case C_SET:
       if( _bIsAck ) {
         // Reply from PPTCtrl or Smartphone
-        LOGD(LOGTAG_MSG, "Got C_SET:%d ack to %d from %d:%s", _msgType, _nodeID, _sensor, payload);
-      } else if( _sensor == NODEID_SMARTPHONE ) {
+        LOGD(LOGTAG_MSG, "Got C_SET:%d ack to %d from %d-%d:%s", _msgType, _nodeID, _sender, _sensor, payload);
+      } else if( _sender == NODEID_SMARTPHONE ) {
         // Request from Smartphone
         String lv_sPayload = payload;
-        theRadio.ProcessSend(_nodeID, _msgType, lv_sPayload, lv_msg, _sensor);
+        theRadio.ProcessSend(_nodeID, _msgType, lv_sPayload, lv_msg, _sender, _sensor);
       }
       break;
     }

@@ -77,6 +77,8 @@ typedef enum {
 	S_SOUND, // Sound sensor, V_TRIPPED, V_ARMED, V_LEVEL (sound level in dB)
 	S_VIBRATION, // Vibration sensor, V_TRIPPED, V_ARMED, V_LEVEL (vibration in Hz)
 	S_MOISTURE, // Moisture sensor, V_TRIPPED, V_ARMED, V_LEVEL (water content or moisture in percentage?)
+	S_ZENSENSOR = 65, // Xlight Super Sensor
+	S_ZENREMOTE = 66, // Xlight Super Remote
 } mysensor_sensor;
 
 // Type of sensor data (for set/req/ack messages)
@@ -135,6 +137,9 @@ typedef enum {
 	V_HVAC_SETPOINT_COOL, // S_HVAC. HVAC cool setpoint (Integer between 0-100)
 	V_HVAC_SETPOINT_HEAT, // S_HEATER, S_HVAC. HVAC/Heater setpoint (Integer between 0-100)
 	V_HVAC_FLOW_MODE, // S_HVAC. Flow mode for HVAC ("Auto", "ContinuousOn", "PeriodicOn")
+
+	V_RELAY_ON = 65,        // Xlight relay on
+	V_RELAY_OFF,            // Xlight relay off
 
 } mysensor_data;
 

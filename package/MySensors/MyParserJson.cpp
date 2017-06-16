@@ -47,8 +47,13 @@ bool MyParserJson::parse(MyMessage &message, char *inputString) {
   if( root.size() < 5 )  // Check for invalid input
     return false;
 
+	message.setSender( GATEWAY_ADDRESS );
+	message.setLast( GATEWAY_ADDRESS );
+	message.setSensor(0);
+
   message.setDestination((uint8_t)atoi(root["nd"]));
-  message.setSensor((uint8_t)atoi(root["sen"]));
+	if( root.containsKey("ori") ) message.setSender((uint8_t)atoi(root["ori"]));
+	if( root.containsKey("sen") ) message.setSensor((uint8_t)atoi(root["sen"]));
   command = atoi(root["cmd"]);
   mSetCommand(message.msg, command);
   ack = atoi(root["ack"]);
@@ -69,10 +74,13 @@ bool MyParserJson::parse(MyMessage &message, char *inputString) {
     value = str;
   }
 
-	message.setSender( GATEWAY_ADDRESS );
-	message.setLast( GATEWAY_ADDRESS );
-  mSetRequestAck(message.msg, ack?1:0);
-  mSetAck(message.msg, false);
+	if( ack == 2 ) {
+		mSetAck(message.msg, true);
+		mSetRequestAck(message.msg, false);
+	} else {
+		mSetAck(message.msg, false);
+  	mSetRequestAck(message.msg, ack?1:0);
+	}
 	if (command == C_STREAM)
 		message.set(bvalue, blen);
 	else

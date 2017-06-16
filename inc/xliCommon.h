@@ -176,6 +176,7 @@ typedef enum
 #define IS_VALID_REMOTE(DevType)    ((DevType) >= devtypCRing3 && (DevType) <= devtypMRing1)
 
 #define IS_GROUP_NODEID(nID)        (nID >= NODEID_MIN_GROUP && nID <= NODEID_MAX_GROUP)
+#define IS_SPECIAL_NODEID(nID)      (nID >= NODEID_PROJECTOR && nID <= NODEID_SMARTPHONE)
 #define IS_NOT_DEVICE_NODEID(nID)   ((nID < NODEID_MIN_DEVCIE || nID > NODEID_MAX_DEVCIE) && nID != NODEID_MAINDEVICE)
 #define IS_NOT_REMOTE_NODEID(nID)   (nID < NODEID_MIN_REMOTE || nID > NODEID_MAX_REMOTE)
 

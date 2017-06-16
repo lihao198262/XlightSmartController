@@ -177,7 +177,9 @@ UC NodeListClass::requestNodeID(UC preferID, char type, uint64_t identity)
 	if( identity == 0 ) return 0;
 
 	UC nodeID = 0;		// error
-	if( IS_GROUP_NODEID(preferID) ) {
+	if( IS_GROUP_NODEID(preferID) && type == NODE_TYP_LAMP ) {
+		nodeID = preferID;
+	} else if( IS_SPECIAL_NODEID(preferID) && type == NODE_TYP_SYSTEM ) {
 		nodeID = preferID;
 	} else {
 		switch( type ) {
@@ -363,6 +365,7 @@ void ConfigClass::InitConfig()
 	strcpy(m_config.pptAccessCode, XLIGHT_BLE_PIN);
   m_config.indBrightness = 0;
 	m_config.mainDevID = NODEID_MAINDEVICE;
+	m_config.subDevID = 0;
   m_config.typeMainDevice = (UC)devtypWRing3;
   m_config.numDevices = 1;
   m_config.numNodes = 2;	// One main device( the smart lamp) and one remote control
@@ -881,6 +884,21 @@ BOOL ConfigClass::SetMainDeviceID(UC devID)
   return true;
 }
 
+UC ConfigClass::GetSubDeviceID()
+{
+	return m_config.subDevID;
+}
+
+BOOL ConfigClass::SetSubDeviceID(UC devID)
+{
+  if( devID != m_config.subDevID )
+  {
+    m_config.subDevID = devID;
+    m_isChanged = true;
+  }
+  return true;
+}
+
 UC ConfigClass::GetMainDeviceType()
 {
   return m_config.typeMainDevice;
@@ -921,7 +939,7 @@ BOOL ConfigClass::SetRemoteNodeDevice(UC remoteID, US devID)
 		lv_Node.nid = remoteID;
 		if( lstNodes.get(&lv_Node) >= 0 ) {
 			if( lv_Node.device != devID ) {
-				lv_Node.device = devID;
+				lv_Node.device = devID % 255;
 				lstNodes.update(&lv_Node);
 				lstNodes.m_isChanged = true;
 
