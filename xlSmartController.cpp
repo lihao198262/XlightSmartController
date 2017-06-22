@@ -890,23 +890,25 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 		//COMMAND 2: Change light color
 		else if (_cmd == CMD_COLOR) {
 			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("ring")) {
-				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
-				const uint8_t ring = (*m_jpCldCmd)["ring"][0].as<uint8_t>();
-				const uint8_t State = (*m_jpCldCmd)["ring"][1].as<uint8_t>();
-				const uint8_t BR = (*m_jpCldCmd)["ring"][2].as<uint8_t>();
-				const uint8_t W = (*m_jpCldCmd)["ring"][3].as<uint8_t>();
-				const uint8_t R = (*m_jpCldCmd)["ring"][4].as<uint8_t>();
-				const uint8_t G = (*m_jpCldCmd)["ring"][5].as<uint8_t>();
-				const uint8_t B = (*m_jpCldCmd)["ring"][6].as<uint8_t>();
+				if( (*m_jpCldCmd)["ring"].size() > 6 ) {
+					const int node_id = (*m_jpCldCmd)["nd"].as<int>();
+					const uint8_t ring = (*m_jpCldCmd)["ring"][0].as<uint8_t>();
+					const uint8_t State = (*m_jpCldCmd)["ring"][1].as<uint8_t>();
+					const uint8_t BR = (*m_jpCldCmd)["ring"][2].as<uint8_t>();
+					const uint8_t W = (*m_jpCldCmd)["ring"][3].as<uint8_t>();
+					const uint8_t R = (*m_jpCldCmd)["ring"][4].as<uint8_t>();
+					const uint8_t G = (*m_jpCldCmd)["ring"][5].as<uint8_t>();
+					const uint8_t B = (*m_jpCldCmd)["ring"][6].as<uint8_t>();
 
-				MyMessage tmpMsg;
-				UC payl_buf[MAX_PAYLOAD];
-				UC payl_len;
+					MyMessage tmpMsg;
+					UC payl_buf[MAX_PAYLOAD];
+					UC payl_len;
 
-				payl_len = CreateColorPayload(payl_buf, ring, State, BR, W, R, G, B);
-				tmpMsg.build(theRadio.getAddress(), node_id, sub_id, C_SET, V_RGBW, true);
-				tmpMsg.set((void *)payl_buf, payl_len);
-				return theRadio.ProcessSend(&tmpMsg);
+					payl_len = CreateColorPayload(payl_buf, ring, State, BR, W, R, G, B);
+					tmpMsg.build(theRadio.getAddress(), node_id, sub_id, C_SET, V_RGBW, true);
+					tmpMsg.set((void *)payl_buf, payl_len);
+					return theRadio.ProcessSend(&tmpMsg);
+				}
 			}
 		}
 		//COMMAND 3: Change brightness
@@ -967,10 +969,26 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 				const int msg_id = (*m_jpCldCmd)["msg"].as<int>();
 				const int ack_flag = ((*m_jpCldCmd).containsKey("ack") ? (*m_jpCldCmd)["ack"].as<int>() : 0);
 				const int tag = ((*m_jpCldCmd).containsKey("tag") ? (*m_jpCldCmd)["tag"].as<int>() : 0);
-				String payl = ((*m_jpCldCmd).containsKey("pl") ? (*m_jpCldCmd)["pl"] : "");
-				// nd;Remote-node-id(Orig=0);Msg;Ack;Type;Payload\n
-				String strCmd = String::format("%d;0;%d;%d;%d;%s", node_id, msg_id, ack_flag, tag, payl.c_str());
-				return theRadio.ProcessSend(strCmd, 0, sub_id);
+				String strCmd;
+				if( (*m_jpCldCmd).containsKey("pl") ) {
+					String payl = (*m_jpCldCmd)["pl"].asString();
+					// nd;Remote-node-id(Orig=0);Msg;Ack;Type;Payload\n
+					strCmd = String::format("%d;0;%d;%d;%d;%s", node_id, msg_id, ack_flag, tag, payl.c_str());
+					return theRadio.ProcessSend(strCmd, 0, sub_id);
+				} else if( (*m_jpCldCmd).containsKey("dt") ) {
+					MyMessage tmpMsg;
+					UC payl_buf[MAX_PAYLOAD];
+					UC payl_len = min(MAX_PAYLOAD, (*m_jpCldCmd)["dt"].size());
+					for( UC i = 0; i < payl_len; i++ ) {
+						payl_buf[i] = (*m_jpCldCmd)["dt"][i].as<uint8_t>();
+					}
+					tmpMsg.build(theRadio.getAddress(), node_id, sub_id, msg_id, tag, (ack_flag == 1), (ack_flag == 2));
+					tmpMsg.set((void *)payl_buf, payl_len);
+					return theRadio.ProcessSend(&tmpMsg);
+				} else {
+					strCmd = String::format("%d;0;%d;%d;%d", node_id, msg_id, ack_flag, tag);
+					return theRadio.ProcessSend(strCmd, 0, sub_id);
+				}
 			}
 		}
 	}
