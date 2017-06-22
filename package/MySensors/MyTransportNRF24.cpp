@@ -186,8 +186,12 @@ bool MyTransportNRF24::available(uint8_t *to, uint8_t *pipe) {
 	if (lv_pipe == CURRENT_NODE_PIPE)
 	{
 		*to = _address;
-		if( _address == GATEWAY_ADDRESS && !_bBaseNetworkEnabled )
+		if( _address == GATEWAY_ADDRESS && !_bBaseNetworkEnabled ) {
+			// Discard message due to disabled BaseNetwork
+			UC lv_pData[MAX_MESSAGE_LENGTH];
+			receive(lv_pData);
 			return false;
+		}
 	}
 	else if(lv_pipe == PRIVATE_NET_PIPE)
 		*to = _address;

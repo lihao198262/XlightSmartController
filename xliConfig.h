@@ -6,6 +6,7 @@
 /*** USER DEFINES:  ***/
 #define FAILURE_HANDLING
 //#define SYS_SERIAL_DEBUG
+#define SYS_RELEASE
 //#define SERIAL_DEBUG
 //#define MAINLOOP_TIMER
 
@@ -49,7 +50,7 @@
 #define RTE_TICK_FASTPROCESS			1						// Pace of execution of FastProcess
 
 // Keep alive message timeout
-#define RTE_TM_KEEP_ALIVE         15
+#define RTE_TM_KEEP_ALIVE         16
 
 // Panel Operarion Timers
 #define RTE_TM_MAX_CCT_IDLE       6           // Maximum idle time (seconds) in CCT control mode
@@ -78,11 +79,11 @@
 #define SENSORDATA_JSON_SIZE		196
 
 // Maximum RF messages buffered
-#define MQ_MAX_RF_RCVMSG        5
-#define MQ_MAX_RF_SNDMSG        8
+#define MQ_MAX_RF_RCVMSG        8
+#define MQ_MAX_RF_SNDMSG        12
 
 // Maximum Cloud Command messages buffered
-#define MQ_MAX_CLOUD_MSG        6
+#define MQ_MAX_CLOUD_MSG        10
 
 // NodeID Convention
 #define NODEID_GATEWAY          0

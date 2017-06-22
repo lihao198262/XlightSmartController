@@ -6,6 +6,7 @@
 #include "xliCommon.h"
 #include "ArduinoJson.h"
 #include "LinkedList.h"
+#include "MoveAverage.h"
 
 // Comment it off if we don't use Particle public cloud
 /// Notes:
@@ -19,11 +20,7 @@
 #define CLV_AppVersion          "appVersion"      // Can also be a Particle Object
 #define CLV_TimeZone            "timeZone"        // Can also be a Particle Object
 #define CLV_SysStatus           "sysStatus"       // Can also be a Particle Object
-#define CLV_JSONData            "jsonData"        // Can also be a Particle Object
 #define CLV_LastMessage         "lastMsg"         // Can also be a Particle Object
-#define CLV_SenTemperatur       "senTemp"
-#define CLV_SenHumidity         "senHumid"
-#define CLV_SenBrightness       "senBright"
 
 // Notes: The length of the funcKey is limited to a max of 12 characters.
 // Cloud functions
@@ -59,6 +56,24 @@
 #define CLT_NAME_DeviceConfig   "xlc-config-device"
 #define CLT_TTL_DeviceConfig    30
 
+typedef struct
+{
+  UC node_id;                       // RF nodeID
+  float data;
+} nd_float_t;
+
+typedef struct
+{
+  UC node_id;                       // RF nodeID
+  US data;
+} nd_us_t;
+
+typedef struct
+{
+  UC node_id;                       // RF nodeID
+  bool data                         :1;
+} nd_bool_t;
+
 //------------------------------------------------------------------
 // Xlight CloudObj Class
 //------------------------------------------------------------------
@@ -71,19 +86,23 @@ public:
   int m_nAppVersion;
   int m_SysStatus;
   String m_tzString;
-  String m_jsonData;
   String m_lastMsg;
   String m_strCldCmd;
 
-  float m_temperature;
-  float m_humidity;
-  uint16_t m_brightness;
-  bool m_motion;
-  uint16_t m_gas;
-  uint16_t m_dust;
-  uint16_t m_smoke;
-  bool m_sound;
-  uint16_t m_noise;
+  // Sensor Data from Controller
+  CMoveAverage m_sysTemp;
+  CMoveAverage m_sysHumi;
+
+  // Sensor Data from Node
+  nd_float_t m_temperature;
+  nd_float_t m_humidity;
+  nd_us_t m_brightness;
+  nd_bool_t m_motion;
+  nd_us_t m_gas;
+  nd_us_t m_dust;
+  nd_us_t m_smoke;
+  nd_bool_t m_sound;
+  nd_us_t m_noise;
 
 public:
   CloudObjClass();
@@ -96,11 +115,10 @@ public:
   virtual int CldSetTimeZone(String tzStr) = 0;
   virtual int CldPowerSwitch(String swStr) = 0;
   virtual int CldSetCurrentTime(String tmStr) = 0;
-  virtual void OnSensorDataChanged(UC _sr) = 0;
+  virtual void OnSensorDataChanged(const UC _sr, const UC _nd) = 0;
   int ProcessJSONString(String inStr);
 
-  BOOL UpdateTemperature(float value);
-  BOOL UpdateHumidity(float value);
+  BOOL UpdateDHT(uint8_t nid, float _temp, float _humi);
   BOOL UpdateBrightness(uint8_t nid, uint8_t value);
   BOOL UpdateMotion(uint8_t nid, bool value);
   BOOL UpdateGas(uint8_t nid, uint16_t value);
@@ -109,7 +127,6 @@ public:
   BOOL UpdateSound(uint8_t nid, bool value);
   BOOL UpdateNoise(uint8_t nid, uint16_t value);
 
-  void UpdateJSONData();
   BOOL PublishLog(const char *msg);
   BOOL PublishDeviceStatus(const char *msg);
   BOOL PublishDeviceConfig(const char *msg);
@@ -119,9 +136,6 @@ public:
 protected:
   void InitCloudObj();
 
-  StaticJsonBuffer<512> m_jBuf;
-  JsonObject *m_jpRoot;
-  JsonObject *m_jpData;
   JsonObject *m_jpCldCmd;
 
   LinkedList<String> m_cmdList;

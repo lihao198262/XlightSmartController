@@ -449,7 +449,11 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 				theRadio.switch2MyNetwork();
         LOGN(LOGTAG_MSG, "RF24 moudle recovered.");
       }
-    }
+    } else {
+			// Try to send testing message
+			String strCmd = String::format("255:8");
+			theRadio.ProcessSend(strCmd);
+		}
 
 		// Check Network
 		if( theConfig.GetWiFiStatus() ) {
@@ -631,13 +635,9 @@ void SmartControllerClass::CollectData(UC tick)
 	if (blnReadDHT) {
 		float t = senDHT.getTempCelcius();
 		float h = senDHT.getHumidity();
-
-		if (!isnan(t)) {
-			UpdateTemperature(t);
-		}
-		if (!isnan(h)) {
-			UpdateHumidity(h);
-		}
+		if (isnan(t)) t = 255;
+		if (isnan(h)) h = 255;
+		UpdateDHT(0, t, h);
 	}
 
 	// Read from ALS
@@ -651,9 +651,9 @@ void SmartControllerClass::CollectData(UC tick)
 	}*/
 
 	// Update json data and publish on to the cloud
-	if (blnReadDHT || blnReadALS || blnReadPIR) {
-		UpdateJSONData();
-	}
+	//if (blnReadDHT || blnReadALS || blnReadPIR) {
+	//	UpdateJSONData();
+	//}
 
 	// ToDo: Proximity detection
 	// from all channels including Wi-Fi, BLE, etc. for MAC addresses and distance to device
@@ -1697,28 +1697,30 @@ bool SmartControllerClass::ExecuteLightCommand(String mySerialStr)
 */
 
 // Match sensor data to condition
-bool SmartControllerClass::Check_SensorData(UC _scope, UC _sr, UC _symbol, US _val1, US _val2)
+bool SmartControllerClass::Check_SensorData(UC _thisNd, UC _scope, UC _sr, UC _nd, UC _symbol, US _val1, US _val2)
 {
 	// Retrieve sensor data
-	US senData = 0;
+	US senData = 255;
 	switch( _scope ) {
 		case SR_SCOPE_CONTROLLER:
 		case SR_SCOPE_NODE:
 		// ToDo: should distinguish node and more sensors
 		if( _sr == sensorDHT ) {
-			senData = (US)(m_temperature + 0.5);
+			if( _nd == 0 && m_sysTemp.IsDataReady() ) senData = (US)(m_sysTemp.GetValue() + 0.5);
+			else if( _nd == m_temperature.node_id ) senData = (US)(m_temperature.data + 0.5);
 		} else if( _sr == sensorDHT_h ) {
-			senData = (US)(m_humidity + 0.5);
-		} else if( _sr == sensorALS ) {
-			senData = m_brightness;
-		} else if( _sr == sensorPIR ) {
-			senData = m_motion;
-		} else if( _sr == sensorSMOKE ) {
-			senData = m_smoke;
-		} else if( _sr == sensorGAS ) {
-			senData = m_gas;
-		} else if( _sr == sensorDUST ) {
-			senData = m_dust;
+			if( _nd == 0 && m_sysHumi.IsDataReady() ) senData = (US)(m_sysHumi.GetValue() + 0.5);
+			else if( _nd == m_humidity.node_id ) senData = (US)(m_humidity.data + 0.5);
+		} else if( _sr == sensorALS && _nd == m_brightness.node_id ) {
+			senData = m_brightness.data;
+		} else if( _sr == sensorPIR && _nd == m_motion.node_id ) {
+			senData = m_motion.data;
+		} else if( _sr == sensorSMOKE && _nd == m_smoke.node_id ) {
+			senData = m_smoke.data;
+		} else if( _sr == sensorGAS && _nd == m_gas.node_id ) {
+			senData = m_gas.data;
+		} else if( _sr == sensorDUST && _nd == m_dust.node_id ) {
+			senData = m_dust.data;
 		}
 		break;
 
@@ -1734,49 +1736,51 @@ bool SmartControllerClass::Check_SensorData(UC _scope, UC _sr, UC _symbol, US _v
 		return false;
 	}
 
-	// Assert value
 	bool rc = false;
-	switch( _symbol ) {
-		case SR_SYM_EQ:
-		rc = (senData == _val1);
-		break;
+	if( senData < 255 ) {
+		// Assert value
+		switch( _symbol ) {
+			case SR_SYM_EQ:
+			rc = (senData == _val1);
+			break;
 
-		case SR_SYM_NE:
-		rc = (senData != _val1);
-		break;
+			case SR_SYM_NE:
+			rc = (senData != _val1);
+			break;
 
-		case SR_SYM_GT:
-		rc = (senData > _val1);
-		break;
+			case SR_SYM_GT:
+			rc = (senData > _val1);
+			break;
 
-		case SR_SYM_GE:
-		rc = (senData >= _val1);
-		break;
+			case SR_SYM_GE:
+			rc = (senData >= _val1);
+			break;
 
-		case SR_SYM_LT:
-		rc = (senData < _val1);
-		break;
+			case SR_SYM_LT:
+			rc = (senData < _val1);
+			break;
 
-		case SR_SYM_LE:
-		rc = (senData <= _val1);
-		break;
+			case SR_SYM_LE:
+			rc = (senData <= _val1);
+			break;
 
-		case SR_SYM_BW:
-		rc = (senData >= _val1 && senData <= _val2);
-		break;
+			case SR_SYM_BW:
+			rc = (senData >= _val1 && senData <= _val2);
+			break;
 
-		case SR_SYM_NB:
-		rc = (senData < _val1 || senData > _val2);
-		break;
+			case SR_SYM_NB:
+			rc = (senData < _val1 || senData > _val2);
+			break;
 
-		default:
-		return false;
+			default:
+			return false;
+		}
 	}
 	return rc;
 }
 
 // Execute Rule, called by Action_Rule(), AlarmTimerTriggered() and OnSensorDataChanged()
-bool SmartControllerClass::Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init, UC _sr)
+bool SmartControllerClass::Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init, const UC _sr, const UC _nd)
 {
 	// Whether execute
 	if( _init ) {
@@ -1822,7 +1826,9 @@ bool SmartControllerClass::Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init
 	for(_cond = 0; _cond < MAX_CONDITION_PER_RULE; _cond++ ) {
 		if( !rulePtr->data.actCond[_cond].enabled ) break;
 
-		bTest = Check_SensorData(rulePtr->data.actCond[_cond].sr_scope, rulePtr->data.actCond[_cond].sr_id,
+		//if( _sr < 255 && _sr != rulePtr->data.actCond[_cond].sr_id ) continue;
+
+		bTest = Check_SensorData(rulePtr->data.node_id, rulePtr->data.actCond[_cond].sr_scope, rulePtr->data.actCond[_cond].sr_id, _nd,
 				rulePtr->data.actCond[_cond].symbol, rulePtr->data.actCond[_cond].sr_value1, rulePtr->data.actCond[_cond].sr_value2);
 
 		if( _connector != COND_SYM_NOT ) {
@@ -1883,13 +1889,13 @@ void SmartControllerClass::ReadNewRules(bool force)
 }
 
 // Scan rule list and check conditions in accordance with changed sensor
-void SmartControllerClass::OnSensorDataChanged(UC _sr)
+void SmartControllerClass::OnSensorDataChanged(const UC _sr, const UC _nd)
 {
 	ListNode<RuleRow_t> *ruleRowPtr = Rule_table.getRoot();
 	while (ruleRowPtr != NULL)
 	{
 		// Execute the rule with changed sensor
-		Execute_Rule(ruleRowPtr, false, _sr);
+		Execute_Rule(ruleRowPtr, false, _sr, _nd);
 		ruleRowPtr = ruleRowPtr->next;
 	} //end of loop
 }
@@ -2794,7 +2800,8 @@ BOOL SmartControllerClass::IsAllRingHueSame(ListNode<DevStatusRow_t> *pDev)
 //------------------------------------------------------------------
 String SmartControllerClass::print_devStatus_table(int row)
 {
-	String strShortDesc;
+	String strShortDesc = "";
+	if( DevStatus_table.get(row).node_id == 0 ) return(strShortDesc);
 
 	SERIAL_LN("==== DevStatus Row %d ====", row);
 	SERIAL_LN("%cuid = %d, type = %d", DevStatus_table.get(row).node_id == CURRENT_DEVICE ? '*' : ' ', DevStatus_table.get(row).uid, DevStatus_table.get(row).type);

@@ -43,6 +43,7 @@
 
 #include "xlxSerialConsole.h"
 #include "xlSmartController.h"
+#include "xliConfig.h"
 #include "xlxConfig.h"
 #include "xlxLogger.h"
 #include "xlxPanel.h"
@@ -203,6 +204,8 @@ bool SerialConsoleClass::callbackDefault(const char *cmd)
 //--------------------------------------------------
 bool SerialConsoleClass::showThisHelp(String &strTopic)
 {
+#ifndef SYS_RELEASE
+
   if(strTopic.equals("check")) {
     SERIAL_LN("--- Command: check <object> ---");
     SERIAL_LN("To check component status, where <object> could be:");
@@ -367,6 +370,10 @@ bool SerialConsoleClass::showThisHelp(String &strTopic)
     SERIAL_LN("Use 'help <command>' for more information\n\r");
     //CloudOutput("check, show, ping, do, test, send, set, sys, help or ?");
   }
+#else
+  SERIAL_LN("Available Commands:");
+  SERIAL_LN("    check, show, ping, do, test, send, set, sys, help or ?\n\r");
+#endif
 
   return true;
 }
@@ -506,18 +513,17 @@ bool SerialConsoleClass::doShow(const char *cmd)
   		SERIAL_LN("m_SysStatus = \t\t\t%d", theSys.m_SysStatus);
       SERIAL_LN("useCloud = \t\t\t%d", theConfig.GetUseCloud());
   		SERIAL_LN("m_tzString = \t\t\t%s", theSys.m_tzString.c_str());
-  		SERIAL_LN("m_jsonData = \t\t\t%s", theSys.m_jsonData.c_str());
       SERIAL_LN("m_strCldCmd = \t\t%s\n\r", theSys.m_strCldCmd.c_str());
   		SERIAL_LN("m_lastMsg = \t\t\t%s", theSys.m_lastMsg.c_str());
       SERIAL_LN("");
       SERIAL_LN("sensorBitmap = \t\t\t0x%04X", theConfig.GetSensorBitmap());
       SERIAL_LN("indBrightness = \t\t%d", theConfig.GetBrightIndicator());
-  		SERIAL_LN("rfPowerLevel = \t\t\t%d", theConfig.GetRFPowerLevel());
-      SERIAL_LN("m_temperature = \t\t%.2f", theSys.m_temperature);
-  		SERIAL_LN("m_humidity = \t\t\t%.2f", theSys.m_humidity);
-  		SERIAL_LN("m_brightness = \t\t\t%u", theSys.m_brightness);
-      SERIAL_LN("m_dust = \t\t\t%d", theSys.m_dust);
-  		SERIAL_LN("m_motion = \t\t\t%s", (theSys.m_motion ? "true" : "false"));
+  		//SERIAL_LN("rfPowerLevel = \t\t\t%d", theConfig.GetRFPowerLevel());
+      //SERIAL_LN("m_temperature = \t\t%.2f", theSys.m_temperature);
+  		//SERIAL_LN("m_humidity = \t\t\t%.2f", theSys.m_humidity);
+  		//SERIAL_LN("m_brightness = \t\t\t%u", theSys.m_brightness);
+      //SERIAL_LN("m_dust = \t\t\t%d", theSys.m_dust);
+  		//SERIAL_LN("m_motion = \t\t\t%s", (theSys.m_motion ? "true" : "false"));
       SERIAL_LN("");
       SERIAL_LN("Main DeviceID = \t\t%d-%d", CURRENT_DEVICE, CURRENT_SUBDEVICE);
       SERIAL_LN("typeMainDevice = \t\t%d", theConfig.GetMainDeviceType());

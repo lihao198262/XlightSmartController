@@ -618,8 +618,19 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							_iValue = payload[1] * 256 + payload[0];
 							theSys.UpdateNoise(replyTo, _iValue);
 						}
+					} else if( _sensor == S_TEMP || _sensor == S_HUM ) {
+						float lv_flt1 = 255, lv_flt2 = 255;
+						if( msgType == V_LEVEL && payl_len >= 4 ) {
+							lv_flt1 = payload[0] + payload[1] / 100.0;
+							lv_flt2 = payload[2] + payload[3] / 100.0;
+						} else if( _sensor == S_TEMP && msgType == V_TEMP ) {
+							lv_flt1 = payload[0] + payload[1] / 100.0;
+						} else if( _sensor == S_HUM && msgType == V_HUM ) {
+							lv_flt2 = payload[0] + payload[1] / 100.0;
+						}
+						theSys.UpdateDHT(replyTo, lv_flt1, lv_flt2);
 					} else if( _sensor == S_DUST || _sensor == S_AIR_QUALITY || _sensor == S_SMOKE ) {
-						if( msgType == V_LEVEL) { // Dust, Gas or Smoke
+						if( msgType == V_LEVEL ) { // Dust, Gas or Smoke
 							_iValue = payload[1] * 256 + payload[0];
 							if( _sensor == S_DUST ) {
 								theSys.UpdateDust(replyTo, _iValue);

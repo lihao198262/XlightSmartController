@@ -939,13 +939,12 @@ BOOL ConfigClass::SetRemoteNodeDevice(UC remoteID, US devID)
 		lv_Node.nid = remoteID;
 		if( lstNodes.get(&lv_Node) >= 0 ) {
 			if( lv_Node.device != devID ) {
-				lv_Node.device = devID % 255;
+				lv_Node.device = devID % 256;
 				lstNodes.update(&lv_Node);
 				lstNodes.m_isChanged = true;
-
-				// Notify Remote Node
-				return theRadio.SendNodeConfig(remoteID, NCF_DEV_ASSOCIATE, devID);
 			}
+			// Notify Remote Node anyway
+			return theRadio.SendNodeConfig(remoteID, NCF_DEV_ASSOCIATE, devID);
 		}
 	}
 
@@ -1131,7 +1130,7 @@ BOOL ConfigClass::LoadDeviceStatus()
 			{
 				if (theSys.DevStatus_table.add(DevStatusArray[i]))
 				{
-					LOGD(LOGTAG_MSG, "Loaded device status row for node_id:%d, uid:%d", DevStatusArray[i].node_id, DevStatusArray[i].uid);
+					LOGD(LOGTAG_MSG, "Loaded device status row for node_id:%d, uid:%d", DevStatusArray[i].node_id);
 				}
 				else
 				{

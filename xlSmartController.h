@@ -89,14 +89,14 @@ public:
   bool Action_Rule(ListNode<RuleRow_t> *rulePtr);
   bool Action_Schedule(OP_FLAG parentFlag, UC uid, UC rule_uid);
 
-  bool Check_SensorData(UC _scope, UC _sr, UC _symbol, US _val1, US _val2);
-  bool Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init = false, UC _sr = 255);
+  bool Check_SensorData(UC _thisNd, UC _scope, UC _sr, UC _nd, UC _symbol, US _val1, US _val2);
+  bool Execute_Rule(ListNode<RuleRow_t> *rulePtr, bool _init = false, const UC _sr = 255, const UC _nd = 0);
 
   //LinkedLists (Working memory tables)
   ChainClass<DevStatusRow_t> DevStatus_table = ChainClass<DevStatusRow_t>(MAX_DEVICE_PER_CONTROLLER);
   ChainClass<ScheduleRow_t> Schedule_table = ChainClass<ScheduleRow_t>(MAX_TABLE_SIZE);
   ChainClass<ScenarioRow_t> Scenario_table = ChainClass<ScenarioRow_t>(MAX_TABLE_SIZE);
-  ChainClass<RuleRow_t> Rule_table = ChainClass<RuleRow_t>((int)(MEM_RULES_LEN / sizeof(RuleRow_t))); // 65536/5 = 13107
+  ChainClass<RuleRow_t> Rule_table = ChainClass<RuleRow_t>(256); // 65536/24 is too big = (int)(MEM_RULES_LEN / sizeof(RuleRow_t))
 
   //Print LinkedLists (Working memory tables)
   String print_devStatus_table(int row);
@@ -108,7 +108,7 @@ public:
   void ReadNewRules(bool force = false);
   bool CreateAlarm(ListNode<ScheduleRow_t>* scheduleRow, uint32_t tag = 0);
   bool DestoryAlarm(AlarmId alarmID, UC SCT_uid);
-  void OnSensorDataChanged(UC _sr);
+  void OnSensorDataChanged(const UC _sr, const UC _nd);
 
   // UID search functions
   ListNode<ScheduleRow_t> *SearchSchedule(UC uid);

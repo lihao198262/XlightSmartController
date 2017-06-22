@@ -36,35 +36,45 @@ CloudObjClass::CloudObjClass()
   m_SysVersion = "";
   m_nAppVersion = VERSION_CONFIG_DATA;
   m_SysStatus = STATUS_OFF;
-  m_temperature = 0.0;
-  m_humidity = 0.0;
-  m_brightness = 0;
-  m_motion = false;
-  m_sound = false;
-  m_gas = 0;
-  m_dust = 0;
-  m_smoke = 0;
-  m_noise = 0;
-  m_jpRoot = &(m_jBuf.createObject());
+
+  m_temperature.node_id = 0;
+  m_temperature.data = 0.0;
+
+  m_humidity.node_id = 0;
+  m_humidity.data = 0.0;
+
+  m_brightness.node_id = 0;
+  m_brightness.data = 0;
+
+  m_motion.node_id = 0;
+  m_motion.data = false;
+
+  m_sound.node_id = 0;
+  m_sound.data = false;
+
+  m_gas.node_id = 0;
+  m_gas.data = 0;
+
+  m_dust.node_id = 0;
+  m_dust.data = 0;
+
+  m_smoke.node_id = 0;
+  m_smoke.data = 0;
+
+  m_noise.node_id = 0;
+  m_noise.data = 0;
+
   m_strCldCmd = "";
 }
 
 // Initialize Cloud Variables & Functions
 void CloudObjClass::InitCloudObj()
 {
-  if( m_jpRoot->success() ) {
-    (*m_jpRoot)["device"] = m_SysID.c_str();
-    m_jpData = &(m_jpRoot->createNestedObject("sensor"));
-  } else {
-    m_jpData = &(JsonObject::invalid());
-  }
-
 #ifdef USE_PARTICLE_CLOUD
   Particle.variable(CLV_SysID, &m_SysID, STRING);
   Particle.variable(CLV_AppVersion, &m_nAppVersion, INT);
   Particle.variable(CLV_TimeZone, &m_tzString, STRING);
   Particle.variable(CLV_SysStatus, &m_SysStatus, INT);
-  Particle.variable(CLV_JSONData, &m_jsonData, STRING);
   Particle.variable(CLV_LastMessage, &m_lastMsg, STRING);
 
   Particle.function(CLF_SetTimeZone, &CloudObjClass::CldSetTimeZone, this);
@@ -107,47 +117,78 @@ int CloudObjClass::CldJSONConfig(String jsonData)
   return 1;
 }
 
-// Here we can either send/publish data on individual data entry basis,
-/// or compose data entries into one larger json string and transfer it in main loop.
-BOOL CloudObjClass::UpdateTemperature(float value)
+BOOL CloudObjClass::UpdateDHT(uint8_t nid, float _temp, float _humi)
 {
-  if( m_temperature != value ) {
-    m_temperature = value;
-    OnSensorDataChanged(sensorDHT);
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["DHTt"] = value;
-    }
-    return true;
-  }
-  return false;
-}
+  static float preTemp = 255;
+  static float preHumi = 255;
 
-BOOL CloudObjClass::UpdateHumidity(float value)
-{
-  if( m_humidity != value ) {
-    m_humidity = value;
-    OnSensorDataChanged(sensorDHT_h);
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["DHTh"] = value;
+  if( _temp > 100 && (_humi > 100 || _humi < 0) ) return false;
+
+  BOOL temp_ok = false;
+  BOOL humi_ok = false;
+  if( nid > 0 ) {
+    if( _temp <= 100 ) {
+      if( m_temperature.data != _temp || m_temperature.node_id != nid ) {
+        m_temperature.node_id = nid;
+        m_temperature.data = _temp;
+        temp_ok = true;
+      }
     }
-    return true;
+    if( _humi >= 0 && _humi <= 100 ) {
+      if( m_humidity.data != _humi || m_humidity.node_id != nid ) {
+        m_humidity.node_id = nid;
+        m_humidity.data = _humi;
+        humi_ok = true;
+      }
+    }
+  } else {
+    if( _temp <= 100 ) {
+      if( m_sysTemp.AddData(_temp) ) {
+        _temp = m_sysTemp.GetValue();
+        if( _temp != preTemp ) {
+          preTemp = _temp;
+          temp_ok = true;
+        }
+      }
+    }
+    if( _humi >= 0 && _humi <= 100 ) {
+      if( m_sysHumi.AddData(_humi) ) {
+        _humi = m_sysHumi.GetValue();
+        if( _humi != preHumi ) {
+          preHumi = _humi;
+          humi_ok = true;
+        }
+      }
+    }
   }
-  return false;
+
+  if( temp_ok ) OnSensorDataChanged(sensorDHT, nid);
+  if( humi_ok ) OnSensorDataChanged(sensorDHT_h, nid);
+
+#ifdef USE_PARTICLE_CLOUD
+  // Publis right away
+  if( Particle.connected() && (temp_ok || humi_ok) ) {
+    String strTemp;
+    if( temp_ok && humi_ok ) {
+      strTemp = String::format("{'nd':%d,'DHTt':%.2f,'DHTh':%.2f}", nid, _temp, _humi);
+    } else if( temp_ok ) {
+      strTemp = String::format("{'nd':%d,'DHTt':%.2f}", nid, _temp);
+    } else {
+      strTemp = String::format("{'nd':%d,'DHTh':%.2f}", nid, _humi);
+    }
+    Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_SensorData, PRIVATE);
+  }
+#endif
+
+  return true;
 }
 
 BOOL CloudObjClass::UpdateBrightness(uint8_t nid, uint8_t value)
 {
-  if( m_brightness != value ) {
-    m_brightness = value;
-    OnSensorDataChanged(sensorALS);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["ALS"] = value;
-    }
-    */
+  if( m_brightness.data != value || m_brightness.node_id != nid ) {
+    m_brightness.node_id = nid;
+    m_brightness.data = value;
+    OnSensorDataChanged(sensorALS, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -162,15 +203,10 @@ BOOL CloudObjClass::UpdateBrightness(uint8_t nid, uint8_t value)
 
 BOOL CloudObjClass::UpdateMotion(uint8_t nid, bool value)
 {
-  if( m_motion != value ) {
-    m_motion = value;
-    OnSensorDataChanged(sensorPIR);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["PIR"] = value;
-    }
-    */
+  if( m_motion.data != value || m_motion.node_id != nid ) {
+    m_motion.node_id = nid;
+    m_motion.data = value;
+    OnSensorDataChanged(sensorPIR, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -185,15 +221,10 @@ BOOL CloudObjClass::UpdateMotion(uint8_t nid, bool value)
 
 BOOL CloudObjClass::UpdateGas(uint8_t nid, uint16_t value)
 {
-  if( m_gas != value ) {
-    m_gas = value;
-    OnSensorDataChanged(sensorGAS);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["GAS"] = value;
-    }
-    */
+  if( m_gas.data != value || m_gas.node_id != nid ) {
+    m_gas.node_id = nid;
+    m_gas.data = value;
+    OnSensorDataChanged(sensorGAS, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -208,15 +239,10 @@ BOOL CloudObjClass::UpdateGas(uint8_t nid, uint16_t value)
 
 BOOL CloudObjClass::UpdateDust(uint8_t nid, uint16_t value)
 {
-  if( m_dust != value ) {
-    m_dust = value;
-    OnSensorDataChanged(sensorDUST);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["PM25"] = value;
-    }
-    */
+  if( m_dust.data != value || m_dust.node_id != nid ) {
+    m_dust.node_id = nid;
+    m_dust.data = value;
+    OnSensorDataChanged(sensorDUST, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -231,15 +257,10 @@ BOOL CloudObjClass::UpdateDust(uint8_t nid, uint16_t value)
 
 BOOL CloudObjClass::UpdateSmoke(uint8_t nid, uint16_t value)
 {
-  if( m_smoke != value ) {
-    m_smoke = value;
-    OnSensorDataChanged(sensorSMOKE);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["SMK"] = value;
-    }
-    */
+  if( m_smoke.data != value || m_smoke.node_id != nid ) {
+    m_smoke.node_id = nid;
+    m_smoke.data = value;
+    OnSensorDataChanged(sensorSMOKE, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -254,15 +275,10 @@ BOOL CloudObjClass::UpdateSmoke(uint8_t nid, uint16_t value)
 
 BOOL CloudObjClass::UpdateSound(uint8_t nid, bool value)
 {
-  if( m_sound != value ) {
-    m_sound = value;
-    OnSensorDataChanged(sensorMIC_b);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["PIR"] = value;
-    }
-    */
+  if( m_sound.data != value || m_sound.node_id != nid ) {
+    m_sound.node_id = nid;
+    m_sound.data = value;
+    OnSensorDataChanged(sensorMIC_b, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -277,15 +293,10 @@ BOOL CloudObjClass::UpdateSound(uint8_t nid, bool value)
 
 BOOL CloudObjClass::UpdateNoise(uint8_t nid, uint16_t value)
 {
-  if( m_noise != value ) {
-    m_noise = value;
-    OnSensorDataChanged(sensorMIC);
-    /*
-    if( m_jpData->success() )
-    {
-      (*m_jpData)["NOS"] = value;
-    }
-    */
+  if( m_noise.data != value || m_noise.node_id != nid ) {
+    m_noise.node_id = nid;
+    m_noise.data = value;
+    OnSensorDataChanged(sensorMIC, nid);
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
@@ -296,30 +307,6 @@ BOOL CloudObjClass::UpdateNoise(uint8_t nid, uint16_t value)
     return true;
   }
   return false;
-}
-
-// Compose JSON Data String
-void CloudObjClass::UpdateJSONData()
-{
-  static UL lastTick = millis();
-
-  // Publish sensor data
-#ifdef USE_PARTICLE_CLOUD
-  if( Particle.connected() ) {
-    if( m_jpData->success() ) {
-      char buf[512];
-      m_jpData->printTo(buf, 512);
-      String strTemp = buf;
-      if( strTemp.length() > 5 ) {
-        if( m_jsonData != strTemp || (millis() - lastTick) / 1000 >= RTE_DELAY_PUBLISH ) {
-          m_jsonData = strTemp;
-          lastTick = millis();
-          Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_SensorData, PRIVATE);
-        }
-      }
-    }
-  }
-#endif
 }
 
 // Publish LOG message and update cloud variable

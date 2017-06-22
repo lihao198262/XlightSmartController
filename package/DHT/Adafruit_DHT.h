@@ -1,4 +1,4 @@
-/* DHT library 
+/* DHT library
  *
  * MIT license
  * written by Adafruit Industries
@@ -42,7 +42,7 @@ class DHT {
 		float getTempFarenheit();
 		float getTempKelvin();
 		float getHeatIndex();
-                float getDewPoint();
+    float getDewPoint();
 
 };
 #endif
