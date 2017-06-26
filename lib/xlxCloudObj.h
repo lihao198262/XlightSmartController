@@ -137,6 +137,7 @@ protected:
   void InitCloudObj();
 
   JsonObject *m_jpCldCmd;
+	UC relay_key_value;
 
   LinkedList<String> m_cmdList;
   LinkedList<String> m_configList;

@@ -36,6 +36,7 @@ CloudObjClass::CloudObjClass()
   m_SysVersion = "";
   m_nAppVersion = VERSION_CONFIG_DATA;
   m_SysStatus = STATUS_OFF;
+  relay_key_value = 0;
 
   m_temperature.node_id = 0;
   m_temperature.data = 0.0;
@@ -127,13 +128,6 @@ BOOL CloudObjClass::UpdateDHT(uint8_t nid, float _temp, float _humi)
   BOOL temp_ok = false;
   BOOL humi_ok = false;
   if( nid > 0 ) {
-    if( _temp <= 100 ) {
-      if( m_temperature.data != _temp || m_temperature.node_id != nid ) {
-        m_temperature.node_id = nid;
-        m_temperature.data = _temp;
-        temp_ok = true;
-      }
-    }
     if( _humi >= 0 && _humi <= 100 ) {
       if( m_humidity.data != _humi || m_humidity.node_id != nid ) {
         m_humidity.node_id = nid;
@@ -141,22 +135,30 @@ BOOL CloudObjClass::UpdateDHT(uint8_t nid, float _temp, float _humi)
         humi_ok = true;
       }
     }
-  } else {
     if( _temp <= 100 ) {
-      if( m_sysTemp.AddData(_temp) ) {
-        _temp = m_sysTemp.GetValue();
-        if( _temp != preTemp ) {
-          preTemp = _temp;
-          temp_ok = true;
-        }
+      if( m_temperature.data != _temp || m_temperature.node_id != nid )
+      {
+        m_temperature.node_id = nid;
+        m_temperature.data = _temp;
+        temp_ok = true;
       }
     }
+  } else {
     if( _humi >= 0 && _humi <= 100 ) {
       if( m_sysHumi.AddData(_humi) ) {
         _humi = m_sysHumi.GetValue();
         if( _humi != preHumi ) {
           preHumi = _humi;
           humi_ok = true;
+        }
+      }
+    }
+    if( _temp <= 100 ) {
+      if( m_sysTemp.AddData(_temp) ) {
+        _temp = m_sysTemp.GetValue();
+        if( _temp != preTemp ) {
+          preTemp = _temp;
+          temp_ok = true;
         }
       }
     }
@@ -169,6 +171,10 @@ BOOL CloudObjClass::UpdateDHT(uint8_t nid, float _temp, float _humi)
   // Publis right away
   if( Particle.connected() && (temp_ok || humi_ok) ) {
     String strTemp;
+
+    // Temperature Message
+    if( humi_ok && _temp < 100 ) temp_ok = true;
+
     if( temp_ok && humi_ok ) {
       strTemp = String::format("{'nd':%d,'DHTt':%.2f,'DHTh':%.2f}", nid, _temp, _humi);
     } else if( temp_ok ) {

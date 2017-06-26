@@ -3,6 +3,9 @@
 #ifndef xliConfig_h
 #define xliConfig_h
 
+// Product Edition
+//#define XLIGHT_HOME_EDITION
+
 /*** USER DEFINES:  ***/
 #define FAILURE_HANDLING
 //#define SYS_SERIAL_DEBUG
@@ -27,7 +30,7 @@
 #endif
 
 // Main Version. Must change if Config_t structure is updated
-#define VERSION_CONFIG_DATA       15
+#define VERSION_CONFIG_DATA       19
 
 // Xlight Application Identification
 #define XLA_ORGANIZATION          "xlight.ca"               // Default value. Read from EEPROM
@@ -58,15 +61,24 @@
 #define RTE_TM_HELD_TO_WIFI       15          // Held duration threshold to enter Wi-Fi setup
 #define RTE_TM_HELD_TO_RESET      10          // Held duration threshold to reset
 #define RTE_TM_HELD_TO_BASENW     5           // Held duration threshold to enable Base Network
+#define RTE_TM_LOOP_KEYCODE       3           // Max idle time of changing loop keycode
 
 // Maximum number of rows for any working memory table implimented using ChainClass
 #define MAX_TABLE_SIZE              8
 
 // Maximum number of device associated to one controller
-#define MAX_DEVICE_PER_CONTROLLER   16
+#ifdef XLIGHT_HOME_EDITION
+#define MAX_DEVICE_PER_CONTROLLER   8
+#else
+#define MAX_DEVICE_PER_CONTROLLER   20
+#endif
 
 // Maximum number of nodes under one controller
+#ifdef XLIGHT_HOME_EDITION
+#define MAX_NODE_PER_CONTROLLER     16
+#else
 #define MAX_NODE_PER_CONTROLLER     64
+#endif
 
 // Maximum conditions within a rule
 #define MAX_CONDITION_PER_RULE      2
@@ -79,11 +91,20 @@
 #define SENSORDATA_JSON_SIZE		196
 
 // Maximum RF messages buffered
+#ifdef XLIGHT_HOME_EDITION
+#define MQ_MAX_RF_RCVMSG        3
+#define MQ_MAX_RF_SNDMSG        5
+#else
 #define MQ_MAX_RF_RCVMSG        8
 #define MQ_MAX_RF_SNDMSG        12
+#endif
 
 // Maximum Cloud Command messages buffered
-#define MQ_MAX_CLOUD_MSG        10
+#ifdef XLIGHT_HOME_EDITION
+#define MQ_MAX_CLOUD_MSG        5
+#else
+#define MQ_MAX_CLOUD_MSG        12
+#endif
 
 // NodeID Convention
 #define NODEID_GATEWAY          0

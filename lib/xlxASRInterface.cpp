@@ -50,14 +50,18 @@ ASRInterfaceClass theASR;
 
 #define PROTOCOL                SERIAL_8N1
 
+#ifndef DISABLE_ASR
+
 #ifndef ASRPort
 #define ASRPort                 SoftSer
 #endif
 
 // RX must be interrupt enabled (on Photon/Electron D0/A5 are not)
-#define PSS_RX                  D1
-#define PSS_TX                  P1S3
+#define PSS_RX                  A6      // D1
+#define PSS_TX                  A7      // P1S3
 ParticleSoftSerial SoftSer(PSS_RX, PSS_TX);
+
+#endif
 
 //------------------------------------------------------------------
 // Xlight SerialConsole Class
@@ -72,9 +76,11 @@ ASRInterfaceClass::ASRInterfaceClass()
 
 void ASRInterfaceClass::Init(US _speed)
 {
+#ifndef DISABLE_ASR
   // Open ASR Port
   m_speed = _speed;
   ASRPort.begin(_speed, PROTOCOL);
+#endif
 }
 
 bool ASRInterfaceClass::processCommand()
@@ -83,6 +89,8 @@ bool ASRInterfaceClass::processCommand()
   static bool bWaitCheck = false;
   bool rc = false;
   int incomingByte;
+
+#ifndef DISABLE_ASR
 
   // Send command
   if( m_sndCmd > 0 ) {
@@ -123,11 +131,15 @@ bool ASRInterfaceClass::processCommand()
     }
   }
 
+#endif
+
   return rc;
 }
 
 bool ASRInterfaceClass::sendCommand(UC _cmd, bool now)
 {
+#ifndef DISABLE_ASR
+
   if( now ) {
     UC buf[ASR_CMD_LEN];
     buf[0] = ASR_TXCMD_PREFIX;
@@ -140,6 +152,9 @@ bool ASRInterfaceClass::sendCommand(UC _cmd, bool now)
   } else {
     m_sndCmd = _cmd;
   }
+
+#endif
+
   return true;
 }
 
@@ -155,6 +170,8 @@ UC ASRInterfaceClass::getLastSentCmd()
 
 void ASRInterfaceClass::executeCmd(UC _cmd)
 {
+#ifndef DISABLE_ASR
+
   LOGD(LOGTAG_MSG, "execute ASR cmd: 0x%x", _cmd);
   UC _snt, _br;
   US _cct;
@@ -175,13 +192,13 @@ void ASRInterfaceClass::executeCmd(UC _cmd)
     case 0x03:    // Brightness++
       _br = theSys.GetDevBrightness(CURRENT_DEVICE);
       _br += BTN_STEP_SHORT_BR;
-      theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
+      theSys.ChangeLampBrightness(CURRENT_DEVICE, _br, CURRENT_SUBDEVICE);
       break;
 
     case 0x04:    // Brightness--
       _br = theSys.GetDevBrightness(CURRENT_DEVICE);
       _br -= BTN_STEP_SHORT_BR;
-      theSys.ChangeLampBrightness(CURRENT_DEVICE, _br);
+      theSys.ChangeLampBrightness(CURRENT_DEVICE, _br, CURRENT_SUBDEVICE);
       break;
 
     case 0x05:    // CCT++
@@ -197,4 +214,6 @@ void ASRInterfaceClass::executeCmd(UC _cmd)
       break;
     }
   }
+
+#endif
 }

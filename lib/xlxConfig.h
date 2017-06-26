@@ -26,6 +26,9 @@
 // Maximum items in AST scenario table
 #define MAX_ASR_SNT_ITEMS           16
 
+// Maximum items in Hardware Key Map
+#define MAX_KEY_MAP_ITEMS           4
+
 //------------------------------------------------------------------
 // Xlight Configuration Data Structures
 //------------------------------------------------------------------
@@ -35,6 +38,12 @@ typedef struct
   SHORT offset;                             // offser in minutes
   UC dst                      :1;           // daylight saving time flag
 } Timezone_t;
+
+typedef struct
+{
+  UC nid;                                   // NodeID
+  UC subID;                                 // SubID
+} HardKeyMap_t;
 
 typedef struct
 #ifdef PACK
@@ -63,7 +72,8 @@ typedef struct
   char Organization[20];                    // Organization name
   UC bcMsgRtpTimes            :4;           // Broadcast message repeat times
   UC ndMsgRtpTimes            :4;           // Node message repeat times
-  UC Reserved_UC1[3];
+  UC tmLoopKC;                              // Loop Keycode timeout
+  UC Reserved_UC1[2];
   char ProductName[20];                     // Product name
   UC subDevID;                              // SubID for main device
   UC Reserved_UC2[3];
@@ -76,7 +86,9 @@ typedef struct
   UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
   UC rfPowerLevel             :2;           // RF Power Level 0..3
   BOOL stWiFi                 :1;           // Wi-Fi status: On / Off
-  UC Reserved1                :5;           // Reserved bits
+  BOOL enHWSwitch             :1;           // Whether use Hardware Switch as default
+  UC hwsObj                   :3;           // Hardware Switch Object
+  UC Reserved1                :1;           // Reserved bits
   US maxBaseNetworkDuration;
   UC useCloud;                              // How to depend on the Cloud
   UC mainDevID;                             // NodeID for main device
@@ -84,6 +96,7 @@ typedef struct
   char blePin[6];
   char pptAccessCode[8];
   UC asrSNT[MAX_ASR_SNT_ITEMS];
+  HardKeyMap_t keyMap[MAX_KEY_MAP_ITEMS];
 } Config_t;
 
 //------------------------------------------------------------------
@@ -413,6 +426,15 @@ public:
   BOOL GetWiFiStatus();
   BOOL SetWiFiStatus(BOOL _st);
 
+  BOOL GetHardwareSwitch();
+  BOOL SetHardwareSwitch(BOOL _sw);
+
+  UC GetRelayKeyObj();
+  BOOL SetRelayKeyObj(UC _value);
+
+  UC GetTimeLoopKC();
+  BOOL SetTimeLoopKC(UC _value);
+
   UC GetRFPowerLevel();
   BOOL SetRFPowerLevel(UC level);
 
@@ -425,6 +447,13 @@ public:
   UC GetASR_SNT(const UC _code);
   BOOL SetASR_SNT(const UC _code, const UC _snt = 0);
   void showASRSNT();
+
+  UC GetKeyMapItem(const UC _key, UC *_subID = NULL);
+  BOOL SetKeyMapItem(const UC _key, const UC _nid, const UC _subID = 0);
+  UC SearchKeyMapItem(const UC _nid, const UC _subID = 0);
+  BOOL IsKeyMapItemAvalaible(const UC _code);
+  bool IsKeyMatchedItem(const UC _code, const UC _nid, const UC _subID = 0);
+  void showKeyMap();
 
   NodeListClass lstNodes;
   RemoteStatus_t m_stMainRemote;

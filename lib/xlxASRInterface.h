@@ -5,6 +5,9 @@
 
 #include "xliCommon.h"
 
+// Uncommment this to enable ASR
+#define DISABLE_ASR
+
 class ASRInterfaceClass
 {
 protected:

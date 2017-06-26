@@ -56,8 +56,11 @@
 // Analog GPIO pins (12-bit A0 - A7), can also be used as digital GPIOs
 #define PIN_RF24_CE		   		      A0
 #define PIN_RF24_CS		   	 	      A2
-#define PIN_SEN_MIC               A6          // Sensor: ECT MIC, DAC
+//#define PIN_SEN_MIC               A6          // Sensor: ECT MIC, DAC
 //#define PIN_SEN_LIGHT             A7          // Sensor: ALS, may also be PWM
+
+#define PIN_SOFT_KEY_1            D1          // Relay control key 1
+#define PIN_SOFT_KEY_2            A7          // Relay control key 2
 
 /*
   RF24L01 connector pinout:

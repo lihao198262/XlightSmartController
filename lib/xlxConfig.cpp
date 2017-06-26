@@ -379,7 +379,9 @@ void ConfigClass::InitConfig()
 	m_config.stWiFi = 1;
 	m_config.bcMsgRtpTimes = 3;
 	m_config.ndMsgRtpTimes = 1;
+	m_config.tmLoopKC = RTE_TM_LOOP_KEYCODE;
 	memset(m_config.asrSNT, 0x00, MAX_ASR_SNT_ITEMS);
+	memset(m_config.keyMap, 0x00, MAX_KEY_MAP_ITEMS * sizeof(HardKeyMap_t));
 }
 
 BOOL ConfigClass::InitDevStatus(UC nodeID)
@@ -1035,6 +1037,52 @@ BOOL ConfigClass::SetWiFiStatus(BOOL _st)
   return false;
 }
 
+BOOL ConfigClass::GetHardwareSwitch()
+{
+  return m_config.enHWSwitch;
+}
+
+BOOL ConfigClass::SetHardwareSwitch(BOOL _sw)
+{
+  if( _sw != m_config.enHWSwitch ) {
+    m_config.enHWSwitch = _sw;
+    m_isChanged = true;
+		LOGW(LOGTAG_ACTION, "hwsw set to %d", _sw);
+    return true;
+  }
+  return false;
+}
+
+UC ConfigClass::GetRelayKeyObj()
+{
+	return m_config.hwsObj;
+}
+
+BOOL ConfigClass::SetRelayKeyObj(UC _value)
+{
+	if( _value != m_config.hwsObj ) {
+    m_config.hwsObj = _value;
+    m_isChanged = true;
+    return true;
+  }
+  return false;
+}
+
+UC ConfigClass::GetTimeLoopKC()
+{
+	return m_config.tmLoopKC;
+}
+
+BOOL ConfigClass::SetTimeLoopKC(UC _value)
+{
+	if( _value != m_config.tmLoopKC ) {
+    m_config.tmLoopKC = _value;
+    m_isChanged = true;
+    return true;
+  }
+  return false;
+}
+
 UC ConfigClass::GetRFPowerLevel()
 {
 	return m_config.rfPowerLevel;
@@ -1093,8 +1141,8 @@ UC ConfigClass::GetASR_SNT(const UC _code)
 BOOL ConfigClass::SetASR_SNT(const UC _code, const UC _snt)
 {
 	if( _code > 0 && _code <= MAX_ASR_SNT_ITEMS ) {
-		if( m_config.asrSNT[_code - 1] !=  _snt ) {
-			m_config.asrSNT[_code - 1] =  _snt;
+		if( m_config.asrSNT[_code - 1] != _snt ) {
+			m_config.asrSNT[_code - 1] = _snt;
 			m_isChanged = true;
 			return true;
 		}
@@ -1108,6 +1156,73 @@ void ConfigClass::showASRSNT()
 	for( UC _code = 0; _code < MAX_ASR_SNT_ITEMS; _code++ ) {
 		if( m_config.asrSNT[_code] > 0 && m_config.asrSNT[_code] < 255 ) {
 			SERIAL_LN("Cmd: 0x%2x - Scenario: %d", _code+1, m_config.asrSNT[_code]);
+		}
+	}
+}
+
+BOOL ConfigClass::IsKeyMapItemAvalaible(const UC _code)
+{
+	if( _code < MAX_KEY_MAP_ITEMS ) {
+		return(m_config.keyMap[_code].nid > 0);
+	}
+	return false;
+}
+
+UC ConfigClass::GetKeyMapItem(const UC _key, UC *_subID)
+{
+	if( _key > 0 && _key <= MAX_KEY_MAP_ITEMS ) {
+		if( _subID ) *_subID = m_config.keyMap[_key - 1].subID;
+		return m_config.keyMap[_key - 1].nid;
+	}
+	return 0;
+}
+
+BOOL ConfigClass::SetKeyMapItem(const UC _key, const UC _nid, const UC _subID)
+{
+	if( _key > 0 && _key <= MAX_KEY_MAP_ITEMS ) {
+		if( m_config.keyMap[_key - 1].nid != _nid || m_config.keyMap[_key - 1].subID != _subID ) {
+			m_config.keyMap[_key - 1].nid = _nid;
+			m_config.keyMap[_key - 1].subID = _subID;
+			m_isChanged = true;
+			return true;
+		}
+	}
+	return false;
+}
+
+UC ConfigClass::SearchKeyMapItem(const UC _nid, const UC _subID)
+{
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		if( m_config.keyMap[_code].nid > 0 ) {
+			if( m_config.keyMap[_code].nid == _nid && m_config.keyMap[_code].subID == _subID ) {
+				return(_code + 1);
+			}
+		}
+	}
+	return 0;
+}
+
+bool ConfigClass::IsKeyMatchedItem(const UC _code, const UC _nid, const UC _subID)
+{
+	if( IsKeyMapItemAvalaible(_code) ) {
+		if( _nid == 0 ) return true;
+
+		if( m_config.keyMap[_code].nid == _nid || _nid == NODEID_DUMMY ) {
+			if( _subID == 0 ) return true;
+			if( m_config.keyMap[_code].subID & _subID ) return true;
+		}
+	}
+	return false;
+}
+
+void ConfigClass::showKeyMap()
+{
+	SERIAL_LN("\n\r**Harware Key Map**");
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		if( m_config.keyMap[_code].nid > 0 ) {
+			SERIAL_LN("Key%d: %d-%d %s", _code + 1, m_config.keyMap[_code].nid,
+					m_config.keyMap[_code].subID,
+					theSys.relay_get_key(_code + 1) ? "on" : "off");
 		}
 	}
 }

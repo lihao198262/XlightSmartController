@@ -78,6 +78,8 @@ SmartControllerClass::SmartControllerClass()
 	m_isRF = false;
 	m_isLAN = false;
 	m_isWAN = false;
+	m_loopKeyCode = 0;
+	m_tickLoopKeyCode = 0;
 }
 
 // Primitive initialization before loading configuration
@@ -200,6 +202,14 @@ void SmartControllerClass::InitPins()
 	pinMode(PIN_BLE_RX, INPUT);
 	pinMode(PIN_BLE_TX, OUTPUT);
 
+	// Init soft keys
+#ifdef PIN_SOFT_KEY_1
+	pinMode(PIN_SOFT_KEY_1, OUTPUT);
+#endif
+#ifdef PIN_SOFT_KEY_2
+	pinMode(PIN_SOFT_KEY_2, OUTPUT);
+#endif
+
 	// Init Panel components
 	thePanel.InitPanel();
 	// Change Panel LED ring to indicate panel is working
@@ -249,7 +259,11 @@ void SmartControllerClass::InitCloudObj()
 // Get the controller started
 BOOL SmartControllerClass::Start()
 {
-	// ToDo:bring controller up along with all modules (RF, wifi, BLE)
+	// Turn on all relay keys
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		relay_set_key(_code + 1, true);
+	}
+
 	FindCurrentDevice();
 
 	LOGI(LOGTAG_MSG, "SmartController started.");
@@ -674,9 +688,36 @@ bool SmartControllerClass::ProcessPanel()
 // Turn the switch of specific device and all devices on or off
 /// Input parameters:
 ///   sw: true = on; false = off
+/// 	hwsw: hardswitch or softswitch. 0 = soft, 1 = hard, 2 = auto
 ///   dev: device id or 0 (all devices under this controller)
+///   subID: subID mask
+int SmartControllerClass::DeviceSwitch(UC sw, UC hwsw, UC dev, const UC subID)
+{
+	UC nKey = 0;
+	int rc = 0;
+
+	// Hard SW or Soft SW
+	if( hwsw == 1 || (hwsw == 2 && theConfig.GetHardwareSwitch()) ) {
+		// Lookup Key corresponding to given nid and subID
+		for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+			if( theConfig.IsKeyMatchedItem(_code, dev, subID) ) {
+				nKey = _code + 1;
+				rc = DevHardSwitch(nKey, sw);
+			}
+		}
+	}
+
+	if( nKey == 0 ) rc = DevSoftSwitch(sw, dev, subID);
+	return rc;
+}
+
 int SmartControllerClass::DevSoftSwitch(UC sw, UC dev, const UC subID)
 {
+	// Turn on hardswitch before turning softswitch on
+	if( sw > 0 ) {
+		MakeSureHardSwitchOn(dev, subID);
+	}
+
 	//String strCmd = String::format("%d;%d;%d;%d;%d;%d", dev, S_DIMMER, C_SET, 1, V_STATUS, (sw ? 1:0));
 	//ExecuteLightCommand(strCmd);
 
@@ -685,6 +726,166 @@ int SmartControllerClass::DevSoftSwitch(UC sw, UC dev, const UC subID)
 	//SetStatus();
 	String strCmd = String::format("%d:7:%d", dev, sw);
 	return theRadio.ProcessSend(strCmd, 0, subID);
+}
+
+int SmartControllerClass::DevHardSwitch(UC key, UC sw)
+{
+	bool _st = (sw == DEVICE_SW_TOGGLE ? !relay_get_key(key) : sw == DEVICE_SW_ON);
+	relay_set_key(key, _st);
+
+	// Confirm On/Off
+	UC nID, subID;
+	nID = theConfig.GetKeyMapItem(key, &subID);
+	if( nID > 0 ) {
+		if( !ConfirmLampOnOff(nID, _st) ) {
+			// Set panel ring on or off
+			if( IS_CURRENT_DEVICE(nID) || (nID == NODEID_DUMMY && (subID == 0 || subID == CURRENT_SUBDEVICE)) ) {
+				thePanel.SetRingOnOff(_st);
+			}
+
+			// Publish device status event
+			String strTemp;
+			if( subID > 0 ) strTemp = String::format("{'nd':%d,'sid':%d,'State':%d}", nID, subID, _st);
+			else strTemp = String::format("{'nd':%d,'State':%d}", nID, _st);
+			PublishDeviceStatus(strTemp.c_str());
+		}
+	}
+	return 1;
+}
+
+bool SmartControllerClass::MakeSureHardSwitchOn(UC dev, const UC subID)
+{
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		if( theConfig.IsKeyMatchedItem(_code, dev, subID) ) {
+			if( !relay_get_key(_code + 1) ) {
+				relay_set_key(_code + 1, true);
+			}
+		}
+	}
+	return true;
+}
+
+bool SmartControllerClass::ToggleLoopHardSwitch()
+{
+	bool bMoveKey = false;
+
+	if( m_loopKeyCode == 0 ) {
+		bMoveKey = ToggleAllHardSwitchs();
+		if( !bMoveKey ) m_tickLoopKeyCode = Time.now();
+	} else if( theConfig.IsKeyMapItemAvalaible(m_loopKeyCode - 1) ) {
+		if(relay_get_key(m_loopKeyCode)) {
+			// On -> Off
+			DevHardSwitch(m_loopKeyCode, false);
+			bMoveKey = true;
+		} else {
+			// Off -> On, stay at current relay key
+			DevHardSwitch(m_loopKeyCode, true);
+			m_tickLoopKeyCode = Time.now();
+		}
+	}
+
+	// Move to next avalaible relay key
+	if( bMoveKey && !IsLoopKeyCodeTimeout() ) {
+		do {
+			m_loopKeyCode++;
+			m_loopKeyCode %= (MAX_KEY_MAP_ITEMS + 1);
+		} while(!SetLoopKeyCode(m_loopKeyCode));
+	}
+
+	return bMoveKey;
+}
+
+bool SmartControllerClass::IsLoopKeyCodeTimeout()
+{
+	if( m_tickLoopKeyCode == 0 ) return true;
+
+	if(theConfig.GetTimeLoopKC() > 0 ) {
+		return(Time.now() - m_tickLoopKeyCode >= theConfig.GetTimeLoopKC());
+	}
+	return false;
+}
+
+bool SmartControllerClass::ToggleAllHardSwitchs()
+{
+	UC _sw = DEVICE_SW_TOGGLE;
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		if( theConfig.IsKeyMapItemAvalaible(_code) ) {
+			if( _sw == DEVICE_SW_TOGGLE ) {
+				_sw = relay_get_key(_code + 1);
+			}
+			DevHardSwitch(_code + 1, _sw == false);
+		}
+	}
+	return(_sw == 1);
+}
+
+bool SmartControllerClass::relay_get_key(UC _key)
+{
+  bool rc = FALSE;
+	UC keyID = 0;
+
+  if( _key >= '1' && _key <= '8' ) keyID = _key - '0';
+	else if( _key >= 1 && _key <= 8 ) keyID = _key;
+
+	if( keyID > 0 ) {
+    rc = BITTEST(relay_key_value, keyID - 1);
+  }
+
+  return rc;
+}
+
+bool SmartControllerClass::relay_set_key(UC _key, bool _on)
+{
+  bool rc = FALSE;
+	UC keyID = 0;
+
+  if( _key >= '1' && _key <= '8' ) keyID = _key - '0';
+	else if( _key >= 1 && _key <= 8 ) keyID = _key;
+
+	if( keyID == 1 ) {
+#ifdef PIN_SOFT_KEY_1
+		// Trigger Relay PIN
+		digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
+		// Update bitmap
+		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
+		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		rc = TRUE;
+#endif
+	} else if( keyID == 2 ) {
+#ifdef PIN_SOFT_KEY_2
+		// Trigger Relay PIN
+		digitalWrite(PIN_SOFT_KEY_2, _on ? HIGH : LOW);
+		// Update bitmap
+		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
+		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		rc = TRUE;
+#endif
+	} else if( keyID == 3 ) {
+#ifdef PIN_SOFT_KEY_3
+		// Trigger Relay PIN
+		digitalWrite(PIN_SOFT_KEY_3, _on ? HIGH : LOW);
+		// Update bitmap
+		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
+		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		rc = TRUE;
+#endif
+	} else if( keyID == 4 ) {
+#ifdef PIN_SOFT_KEY_4
+		// Trigger Relay PIN
+		digitalWrite(PIN_SOFT_KEY_4, _on ? HIGH : LOW);
+		// Update bitmap
+		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
+		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		rc = TRUE;
+#endif
+	}
+
+	if( rc ) {
+		String strTemp = String::format("{'km':%d,'on':%d}", keyID, _on);
+		PublishDeviceStatus(strTemp.c_str());
+	}
+
+  return rc;
 }
 
 // High speed system timer process
@@ -834,7 +1035,9 @@ int SmartControllerClass::CldPowerSwitch(String swStr)
 	} else {
 		blnOn = DEVICE_SW_TOGGLE;
 	}
-	return DevSoftSwitch(blnOn, bytDev, subID);
+
+	// Hard SW or Soft SW: auto-select
+	return DeviceSwitch(blnOn, 2, bytDev, subID);
 }
 
 // Execute Operations, including SerialConsole commands
@@ -878,13 +1081,8 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("state")) {
 				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
 				const int state = (*m_jpCldCmd)["state"].as<int>();
-
-				//char buf[64];
-				//sprintf(buf, "%d;%d;%d;%d;%d;%d", node_id, S_DIMMER, C_SET, 1, V_STATUS, state);
-				//String strCmd(buf);
-				//ExecuteLightCommand(strCmd);
-				String strCmd = String::format("%d:7:%d", node_id, state);
-				return theRadio.ProcessSend(strCmd, 0, sub_id);
+				const UC _hwsw = (UC)((*m_jpCldCmd).containsKey("hw") ? (*m_jpCldCmd)["hw"].as<int>() : 2);
+				return DeviceSwitch(state, _hwsw, node_id, sub_id);
 			}
 		}
 		//COMMAND 2: Change light color
@@ -1268,6 +1466,16 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 					theConfig.SetCloudSerialEnabled(data["csc"] > 0);
 				} else if( data.containsKey("asrcmd") && data.containsKey("SNT_id") ) {
 					theConfig.SetASR_SNT((UC)data["asrcmd"], (UC)data["SNT_id"]);
+				} else if( data.containsKey("loopkc") ) {
+					theSys.SetLoopKeyCode((UC)data["loopkc"].as<int>());
+				} else if( data.containsKey("kcto") ) {
+					theConfig.SetTimeLoopKC((UC)data["kcto"].as<int>());
+				} else if( data.containsKey("hwsobj") ) {
+					theConfig.SetRelayKeyObj((UC)data["hwsobj"].as<int>());
+				} else if( data.containsKey("hwsw") ) {
+					theConfig.SetHardwareSwitch(data["hwsw"] > 0);
+				} else if( data.containsKey("km") && data.containsKey("nd") ) {
+					theConfig.SetKeyMapItem((UC)data["km"], (UC)data["nd"], (UC)(data.containsKey("sid") ? data["sid"].as<int>() : 0));
 				} else if( data.containsKey("nd") ) {
 					UC node_id = (UC)data["nd"];
 					if( data.containsKey("new_id") ) {
@@ -2266,7 +2474,21 @@ US SmartControllerClass::GetDevCCT(UC _nodeID)
 	} else {
 		_cct = (US)thePanel.GetCCTValue(false);
 	}
- return _cct;
+	return _cct;
+}
+
+UC SmartControllerClass::GetLoopKeyCode()
+{
+	return m_loopKeyCode;
+}
+
+bool SmartControllerClass::SetLoopKeyCode(const UC _key)
+{
+	if( _key > 0 ) {
+		if( !theConfig.IsKeyMapItemAvalaible(_key - 1) ) return false;
+	}
+	m_loopKeyCode = _key;
+	return true;
 }
 
 US SmartControllerClass::VerifyDevicePresence(UC *_assoDev, UC _nodeID, UC _devType, uint64_t _identity)
@@ -2334,7 +2556,8 @@ BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID, const UC subID)
 	} else {
 		_st = thePanel.GetRingOnOff() ? DEVICE_SW_OFF : DEVICE_SW_ON;
 	}
-	rc = DevSoftSwitch(_st, _nodeID, subID);
+
+	rc = DeviceSwitch(_st, 2, _nodeID, subID);
 	// Wait for confirmation or not
 	if( !rc ) {
 		// no need to wait
@@ -2345,6 +2568,8 @@ BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID, const UC subID)
 
 BOOL SmartControllerClass::ChangeLampBrightness(UC _nodeID, UC _percentage, const UC subID)
 {
+	MakeSureHardSwitchOn(_nodeID, subID);
+
 	BOOL rc = false;
 	//ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	//if (!DevStatusRowPtr) {

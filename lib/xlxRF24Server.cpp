@@ -647,7 +647,7 @@ bool RF24ServerClass::ProcessReceiveMQ()
 			case C_REQ:
 				if( msgType == V_STATUS || msgType == V_PERCENTAGE || msgType == V_LEVEL
 					  || msgType == V_RGBW || msgType == V_DISTANCE || msgType == V_VAR1
-					  || msgType == V_RELAY_ON || msgType == V_RELAY_OFF ) {
+					  || msgType == V_RELAY_ON || msgType == V_RELAY_OFF || msgType == V_RELAY_MAP ) {
 					//transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
 					transTo = msg.getDestination();
 					BOOL bDataChanged = false;
@@ -699,7 +699,12 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							// Publish Relay Status
 							strTemp = String::format("{'nd':%d,'k_%s':'%c'}", replyTo, msgType == V_RELAY_ON ? "on" : "off", payload[0]);
 							theSys.PublishDeviceStatus(strTemp.c_str());
-							bDataChanged = true;
+							//bDataChanged = true;
+						} else if( msgType == V_RELAY_MAP ) {
+							// Publish Relay Status
+							strTemp = String::format("{'nd':%d,'km':%d}", replyTo, payload[0]);
+							theSys.PublishDeviceStatus(strTemp.c_str());
+							//bDataChanged = true;
 						}
 
 						// If data changed, new status must broadcast to all end points
@@ -742,9 +747,25 @@ bool RF24ServerClass::ProcessReceiveMQ()
 				} else {
 					//transTo = (msg.getDestination() == getAddress() ? _sensor : msg.getDestination());
 					if( transTo > 0 ) {
+						bool lv_skip = false;
+						// Remote turns on or set scene: make sure hardswitch is on
+						if( (msgType == V_SCENE_ON || msgType == V_STATUS) && !IS_NOT_REMOTE_NODEID(replyTo) ) {
+							if( msgType == V_STATUS && theConfig.GetHardwareSwitch() ) {
+								_bValue = payload[0];
+								if( _bValue == DEVICE_SW_TOGGLE ) _bValue = 1 - theSys.GetDevOnOff(transTo);
+								if( _bValue == DEVICE_SW_OFF ) {
+									lv_skip = theSys.DeviceSwitch(DEVICE_SW_OFF, 1, transTo, _sensor);
+								} else {
+									lv_skip = theSys.DevSoftSwitch(DEVICE_SW_ON, transTo, _sensor);
+								}
+							} else {
+								theSys.MakeSureHardSwitchOn(transTo, _sensor);
+							}
+						}
+
 						if( msgType == V_SCENE_ON ) {
 							theSys.ChangeLampScenario(transTo, payload[0], replyTo, _sensor);
-						}	else {
+						}	else if(!lv_skip) {
 							// Transfer message
 							msg.build(replyTo, transTo, _sensor, C_SET, msgType, _needAck, _bIsAck, true);
 							// Keep payload unchanged

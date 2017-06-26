@@ -173,7 +173,7 @@ typedef enum
 #define IS_RAINBOW(DevType)         ((DevType) >= devtypCRing3 && (DevType) <= devtypCRing1)
 #define IS_MIRAGE(DevType)          ((DevType) >= devtypMRing3 && (DevType) <= devtypMRing1)
 #define IS_VALID_LAMP(DevType)      ((DevType) >= devtypMRing3 && (DevType) <= devtypMRing1)
-#define IS_VALID_REMOTE(DevType)    ((DevType) >= devtypCRing3 && (DevType) <= devtypMRing1)
+#define IS_VALID_REMOTE(DevType)    ((DevType) >= remotetypRFSimply && (DevType) <= remotetypRFEnhanced)
 
 #define IS_GROUP_NODEID(nID)        (nID >= NODEID_MIN_GROUP && nID <= NODEID_MAX_GROUP)
 #define IS_SPECIAL_NODEID(nID)      (nID >= NODEID_PROJECTOR && nID <= NODEID_SMARTPHONE)
