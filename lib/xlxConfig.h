@@ -76,7 +76,8 @@ typedef struct
   UC Reserved_UC1[2];
   char ProductName[20];                     // Product name
   UC subDevID;                              // SubID for main device
-  UC Reserved_UC2[3];
+  UC relay_key_value;
+  UC Reserved_UC2[2];
   char Token[64];                           // Token
   BOOL enableCloudSerialCmd   :1;           // Whether enable cloud serial command
   BOOL enableDailyTimeSync    :1;           // Whether enable daily time synchronization
@@ -447,6 +448,11 @@ public:
   UC GetASR_SNT(const UC _code);
   BOOL SetASR_SNT(const UC _code, const UC _snt = 0);
   void showASRSNT();
+
+  UC GetRelayKeys();
+  BOOL SetRelayKeys(const UC _keys);
+  UC GetRelayKey(const UC _code);
+  BOOL SetRelayKey(const UC _code, const UC _on);
 
   UC GetKeyMapItem(const UC _key, UC *_subID = NULL);
   BOOL SetKeyMapItem(const UC _key, const UC _nid, const UC _subID = 0);

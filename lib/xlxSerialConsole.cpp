@@ -533,6 +533,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
       SERIAL_LN("");
       SERIAL_LN("sensorBitmap = \t\t\t0x%04X", theConfig.GetSensorBitmap());
       SERIAL_LN("indBrightness = \t\t%d", theConfig.GetBrightIndicator());
+      SERIAL_LN("relay_keys = \t\t\t0x%02X", theConfig.GetRelayKeys());
   		//SERIAL_LN("rfPowerLevel = \t\t\t%d", theConfig.GetRFPowerLevel());
       //SERIAL_LN("m_temperature = \t\t%.2f", theSys.m_temperature);
   		//SERIAL_LN("m_humidity = \t\t\t%.2f", theSys.m_humidity);

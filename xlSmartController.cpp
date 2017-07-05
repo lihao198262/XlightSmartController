@@ -259,10 +259,7 @@ void SmartControllerClass::InitCloudObj()
 // Get the controller started
 BOOL SmartControllerClass::Start()
 {
-	// Turn on all relay keys
-	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
-		relay_set_key(_code + 1, true);
-	}
+	UC pre_relay_keys = theConfig.GetRelayKeys();
 
 	FindCurrentDevice();
 
@@ -294,6 +291,10 @@ BOOL SmartControllerClass::Start()
 			// ToDo: set RGBW
 		}
 	}
+
+	// Restore relay key to previous state
+	theConfig.SetRelayKeys(pre_relay_keys);
+	relay_restore_keystate();
 
 	// Publish local the main device status
 	if( Particle.connected() == true ) {
@@ -736,21 +737,40 @@ int SmartControllerClass::DevHardSwitch(UC key, UC sw)
 	// Confirm On/Off
 	UC nID, subID;
 	nID = theConfig.GetKeyMapItem(key, &subID);
-	if( nID > 0 ) {
-		if( !ConfirmLampOnOff(nID, _st) ) {
-			// Set panel ring on or off
-			if( IS_CURRENT_DEVICE(nID) || (nID == NODEID_DUMMY && (subID == 0 || subID == CURRENT_SUBDEVICE)) ) {
-				thePanel.SetRingOnOff(_st);
-			}
+	HardConfirmOnOff(nID, subID, _st);
 
-			// Publish device status event
-			String strTemp;
-			if( subID > 0 ) strTemp = String::format("{'nd':%d,'sid':%d,'State':%d}", nID, subID, _st);
-			else strTemp = String::format("{'nd':%d,'State':%d}", nID, _st);
-			PublishDeviceStatus(strTemp.c_str());
-		}
-	}
 	return 1;
+}
+
+bool SmartControllerClass::HardConfirmOnOff(UC dev, const UC subID, const UC _st)
+{
+	if( dev > 0 ) {
+		if( !IS_NOT_DEVICE_NODEID(dev) ) {
+				ConfirmLampOnOff(dev, _st);
+		}
+
+		// Set panel ring on or off
+		if( IS_CURRENT_DEVICE(dev) || (dev == NODEID_DUMMY && (subID == 0 || subID == CURRENT_SUBDEVICE)) ) {
+			thePanel.SetRingOnOff(_st);
+			if( m_pMainDev ) {
+				m_pMainDev->data.ring[0].State = _st;
+				m_pMainDev->data.ring[1].State = _st;
+				m_pMainDev->data.ring[2].State = _st;
+				m_pMainDev->data.run_flag = EXECUTED;
+				m_pMainDev->data.flash_flag = UNSAVED;
+				m_pMainDev->data.op_flag = POST;
+				theConfig.SetDSTChanged(true);
+			}
+		}
+
+		// Publish device status event
+		String strTemp;
+		if( subID > 0 ) strTemp = String::format("{'nd':%d,'sid':%d,'State':%d}", dev, subID, _st);
+		else strTemp = String::format("{'nd':%d,'State':%d}", dev, _st);
+		PublishDeviceStatus(strTemp.c_str());
+		return true;
+	}
+	return false;
 }
 
 bool SmartControllerClass::MakeSureHardSwitchOn(UC dev, const UC subID)
@@ -828,7 +848,7 @@ bool SmartControllerClass::relay_get_key(UC _key)
 	else if( _key >= 1 && _key <= 8 ) keyID = _key;
 
 	if( keyID > 0 ) {
-    rc = BITTEST(relay_key_value, keyID - 1);
+    rc = theConfig.GetRelayKey(keyID - 1);
   }
 
   return rc;
@@ -847,8 +867,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
 		// Update bitmap
-		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
-		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		theConfig.SetRelayKey(keyID - 1, _on);
 		rc = TRUE;
 #endif
 	} else if( keyID == 2 ) {
@@ -856,8 +875,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_2, _on ? HIGH : LOW);
 		// Update bitmap
-		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
-		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		theConfig.SetRelayKey(keyID - 1, _on);
 		rc = TRUE;
 #endif
 	} else if( keyID == 3 ) {
@@ -865,8 +883,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_3, _on ? HIGH : LOW);
 		// Update bitmap
-		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
-		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		theConfig.SetRelayKey(keyID - 1, _on);
 		rc = TRUE;
 #endif
 	} else if( keyID == 4 ) {
@@ -874,8 +891,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_4, _on ? HIGH : LOW);
 		// Update bitmap
-		if( _on ) relay_key_value = BITSET(relay_key_value, keyID - 1);
-		else relay_key_value = BITUNSET(relay_key_value, keyID - 1);
+		theConfig.SetRelayKey(keyID - 1, _on);
 		rc = TRUE;
 #endif
 	}
@@ -886,6 +902,14 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 	}
 
   return rc;
+}
+
+// Restore relay key to previous state
+void SmartControllerClass::relay_restore_keystate()
+{
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		relay_set_key(_code + 1, theConfig.GetRelayKey(_code));
+	}
 }
 
 // High speed system timer process
@@ -2595,70 +2619,70 @@ BOOL SmartControllerClass::ChangeBR_CCT(UC _nodeID, UC _br, US _cct, const UC su
 
 BOOL SmartControllerClass::ChangeLampScenario(UC _nodeID, UC _scenarioID, UC _replyTo, const UC _sensor)
 {
-	// Find node object
-	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
-	if (DevStatusRowPtr == NULL)
-	{
-		LOGW(LOGTAG_MSG, "Failed to execte CMD_SCENARIO, wrong node_id %d", _nodeID);
-	}
+	BOOL _findIt = false;
+	if( _nodeID < 255 || _scenarioID < 64 ) {
+		// Find node object
+		ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
+		if (DevStatusRowPtr == NULL)
+		{
+			LOGW(LOGTAG_MSG, "Failed to execte CMD_SCENARIO, wrong node_id %d", _nodeID);
+		}
 
-	// Find hue data of the 3 rings
-	BOOL _findIt;
-	ListNode<ScenarioRow_t> *rowptr = SearchScenario(_scenarioID);
-	if (rowptr)
-	{
-		_findIt = true;
-		String strCmd;
-		if( rowptr->data.sw != DEVICE_SW_DUMMY ) {
-			strCmd = String::format("%d:7:%d", _nodeID, rowptr->data.sw);
-			theRadio.ProcessSend(strCmd, _replyTo, _sensor);
-		} else {
-			UC lv_type = devtypCRing3;
-			if( DevStatusRowPtr ) lv_type = DevStatusRowPtr->data.type;
-			if(IS_SUNNY(lv_type)) {
-				if( rowptr->data.ring[0].State == DEVICE_SW_OFF ) {
-					strCmd = String::format("%d:7:0", _nodeID);
-				} else {
-					strCmd = String::format("%d:13:%d:%d", _nodeID, rowptr->data.ring[0].BR, rowptr->data.ring[0].CCT);
-				}
+		// Find hue data of the 3 rings
+		ListNode<ScenarioRow_t> *rowptr = SearchScenario(_scenarioID);
+		if (rowptr)
+		{
+			_findIt = true;
+			String strCmd;
+			if( rowptr->data.sw != DEVICE_SW_DUMMY ) {
+				strCmd = String::format("%d:7:%d", _nodeID, rowptr->data.sw);
 				theRadio.ProcessSend(strCmd, _replyTo, _sensor);
-			} else { // Rainbow and Migrage
-				MyMessage tmpMsg;
-				UC payl_buf[MAX_PAYLOAD];
-				UC payl_len;
-
-				// All rings same settings
-				bool bAllRings = (rowptr->data.ring[1].CCT == 256);
-
-				for( UC idx = 0; idx < MAX_RING_NUM; idx++ ) {
-					if( !bAllRings || idx == 0 ) {
-						payl_len = CreateColorPayload(payl_buf, bAllRings ? RING_ID_ALL : idx + 1, rowptr->data.ring[idx].State,
-												rowptr->data.ring[idx].BR, rowptr->data.ring[idx].CCT % 256, rowptr->data.ring[idx].R, rowptr->data.ring[idx].G, rowptr->data.ring[idx].B);
-						tmpMsg.build(_replyTo, _nodeID, _sensor, C_SET, V_RGBW, true);
-						tmpMsg.set((void *)payl_buf, payl_len);
-						theRadio.ProcessSend(&tmpMsg);
+			} else {
+				UC lv_type = devtypCRing3;
+				if( DevStatusRowPtr ) lv_type = DevStatusRowPtr->data.type;
+				if(IS_SUNNY(lv_type)) {
+					if( rowptr->data.ring[0].State == DEVICE_SW_OFF ) {
+						strCmd = String::format("%d:7:0", _nodeID);
+					} else {
+						strCmd = String::format("%d:13:%d:%d", _nodeID, rowptr->data.ring[0].BR, rowptr->data.ring[0].CCT);
 					}
-					if( IS_MIRAGE(lv_type) ) {
-						// ToDo: construct mirage message
-						//tmpMsg.build(_replyTo, _nodeID, _sensor, C_SET, V_DISTANCE, true);
-						//tmpMsg.set((void *)payl_buf, payl_len);
-						//theRadio.ProcessSend(&tmpMsg);
+					theRadio.ProcessSend(strCmd, _replyTo, _sensor);
+				} else { // Rainbow and Migrage
+					MyMessage tmpMsg;
+					UC payl_buf[MAX_PAYLOAD];
+					UC payl_len;
+
+					// All rings same settings
+					bool bAllRings = (rowptr->data.ring[1].CCT == 256);
+
+					for( UC idx = 0; idx < MAX_RING_NUM; idx++ ) {
+						if( !bAllRings || idx == 0 ) {
+							payl_len = CreateColorPayload(payl_buf, bAllRings ? RING_ID_ALL : idx + 1, rowptr->data.ring[idx].State,
+													rowptr->data.ring[idx].BR, rowptr->data.ring[idx].CCT % 256, rowptr->data.ring[idx].R, rowptr->data.ring[idx].G, rowptr->data.ring[idx].B);
+							tmpMsg.build(_replyTo, _nodeID, _sensor, C_SET, V_RGBW, true);
+							tmpMsg.set((void *)payl_buf, payl_len);
+							theRadio.ProcessSend(&tmpMsg);
+						}
+						if( IS_MIRAGE(lv_type) ) {
+							// ToDo: construct mirage message
+							//tmpMsg.build(_replyTo, _nodeID, _sensor, C_SET, V_DISTANCE, true);
+							//tmpMsg.set((void *)payl_buf, payl_len);
+							//theRadio.ProcessSend(&tmpMsg);
+						}
 					}
 				}
 			}
+			rowptr->data.run_flag = EXECUTED;
+			theConfig.SetSNTChanged(true);
 		}
-		rowptr->data.run_flag = EXECUTED;
-		theConfig.SetSNTChanged(true);
-	}
-	else
-	{
-		_findIt = false;
-		LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenario %d not found", _nodeID, _scenarioID);
+		else
+		{
+			LOGE(LOGTAG_MSG, "Could not change node:%d light's color, scenario %d not found", _nodeID, _scenarioID);
+		}
 	}
 
 	// Publish Device-Scenario-Change message
-	String strTemp = String::format("{'nd':%d,'SNT_uid':%d,'found':%d}",
-			 _nodeID, _scenarioID, _findIt);
+	String strTemp = String::format("{'nd':%d,'sid':%d,'SNT_uid':%d,'found':%d}", _nodeID, _sensor, _scenarioID, _findIt);
 	PublishDeviceStatus(strTemp.c_str());
 
 	return _findIt;

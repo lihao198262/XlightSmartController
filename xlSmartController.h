@@ -71,11 +71,13 @@ public:
   int DeviceSwitch(UC sw, UC hwsw = 2, UC dev = 0, const UC subID = 0);
   int DevSoftSwitch(UC sw, UC dev = 0, const UC subID = 0);
   int DevHardSwitch(UC key, UC sw);
+  bool HardConfirmOnOff(UC dev, const UC subID = 0, const UC _st = 0);
   bool MakeSureHardSwitchOn(UC dev = 0, const UC subID = 0);
   bool ToggleAllHardSwitchs();
   bool ToggleLoopHardSwitch();
   bool relay_set_key(UC _key, bool _on);
   bool relay_get_key(UC _key);
+  void relay_restore_keystate();
 
   // High speed system timer process
   void FastProcess();

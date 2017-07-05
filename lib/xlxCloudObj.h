@@ -71,8 +71,8 @@ typedef struct
 typedef struct
 {
   UC node_id;                       // RF nodeID
-  bool data                         :1;
-} nd_bool_t;
+  UC data;
+} nd_uc_t;
 
 //------------------------------------------------------------------
 // Xlight CloudObj Class
@@ -97,11 +97,12 @@ public:
   nd_float_t m_temperature;
   nd_float_t m_humidity;
   nd_us_t m_brightness;
-  nd_bool_t m_motion;
+  nd_uc_t m_motion;
+  nd_uc_t m_irKey;
   nd_us_t m_gas;
   nd_us_t m_dust;
   nd_us_t m_smoke;
-  nd_bool_t m_sound;
+  nd_uc_t m_sound;
   nd_us_t m_noise;
 
 public:
@@ -120,11 +121,11 @@ public:
 
   BOOL UpdateDHT(uint8_t nid, float _temp, float _humi);
   BOOL UpdateBrightness(uint8_t nid, uint8_t value);
-  BOOL UpdateMotion(uint8_t nid, bool value);
+  BOOL UpdateMotion(uint8_t nid, uint8_t sensor, uint8_t value);
   BOOL UpdateGas(uint8_t nid, uint16_t value);
   BOOL UpdateDust(uint8_t nid, uint16_t value);
   BOOL UpdateSmoke(uint8_t nid, uint16_t value);
-  BOOL UpdateSound(uint8_t nid, bool value);
+  BOOL UpdateSound(uint8_t nid, uint8_t value);
   BOOL UpdateNoise(uint8_t nid, uint16_t value);
 
   BOOL PublishLog(const char *msg);
@@ -137,8 +138,7 @@ protected:
   void InitCloudObj();
 
   JsonObject *m_jpCldCmd;
-	UC relay_key_value;
-
+	
   LinkedList<String> m_cmdList;
   LinkedList<String> m_configList;
 };

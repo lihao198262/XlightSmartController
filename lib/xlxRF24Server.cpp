@@ -141,6 +141,7 @@ bool RF24ServerClass::ProcessSend(const UC _node, const UC _msgID, String &strPa
 		// Serail format to MySensors message structure
 		bMsgReady = serialMsgParser.parse(lv_msg, strBuffer);
 		if (bMsgReady) {
+			if( _sensor > 0 ) lv_msg.setSensor(_sensor);
 			SERIAL("Now sending message...");
 		}
 		break;
@@ -603,9 +604,9 @@ bool RF24ServerClass::ProcessReceiveMQ()
 				} else {
 					ListNode<DevStatusRow_t> *DevStatusRowPtr = theSys.SearchDevStatus(replyTo);
 					if (DevStatusRowPtr) theSys.ConfirmLampPresent(DevStatusRowPtr, true);
-					if( _sensor == S_IR ) {
+					if( _sensor == S_MOTION || _sensor == S_IR ) {
 						if( msgType == V_STATUS) { // PIR
-							theSys.UpdateMotion(replyTo, msg.getByte()!=DEVICE_SW_OFF);
+							theSys.UpdateMotion(replyTo, _sensor, msg.getByte());
 						}
 					} else if( _sensor == S_LIGHT_LEVEL ) {
 						if( msgType == V_LIGHT_LEVEL) { // ALS
@@ -749,14 +750,15 @@ bool RF24ServerClass::ProcessReceiveMQ()
 					if( transTo > 0 ) {
 						bool lv_skip = false;
 						// Remote turns on or set scene: make sure hardswitch is on
-						if( (msgType == V_SCENE_ON || msgType == V_STATUS) && !IS_NOT_REMOTE_NODEID(replyTo) ) {
-							if( msgType == V_STATUS && theConfig.GetHardwareSwitch() ) {
+						if( msgType == V_STATUS && !IS_NOT_REMOTE_NODEID(replyTo) ) {
+							if( theConfig.GetHardwareSwitch() ) {
 								_bValue = payload[0];
 								if( _bValue == DEVICE_SW_TOGGLE ) _bValue = 1 - theSys.GetDevOnOff(transTo);
 								if( _bValue == DEVICE_SW_OFF ) {
 									lv_skip = theSys.DeviceSwitch(DEVICE_SW_OFF, 1, transTo, _sensor);
 								} else {
 									lv_skip = theSys.DevSoftSwitch(DEVICE_SW_ON, transTo, _sensor);
+									if( lv_skip ) theSys.HardConfirmOnOff(transTo, _sensor, DEVICE_SW_ON);
 								}
 							} else {
 								theSys.MakeSureHardSwitchOn(transTo, _sensor);

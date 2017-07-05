@@ -379,6 +379,7 @@ void ConfigClass::InitConfig()
 	m_config.stWiFi = 1;
 	m_config.bcMsgRtpTimes = 3;
 	m_config.ndMsgRtpTimes = 1;
+	m_config.relay_key_value = 0xff;
 	m_config.tmLoopKC = RTE_TM_LOOP_KEYCODE;
 	memset(m_config.asrSNT, 0x00, MAX_ASR_SNT_ITEMS);
 	memset(m_config.keyMap, 0x00, MAX_KEY_MAP_ITEMS * sizeof(HardKeyMap_t));
@@ -1158,6 +1159,40 @@ void ConfigClass::showASRSNT()
 			SERIAL_LN("Cmd: 0x%2x - Scenario: %d", _code+1, m_config.asrSNT[_code]);
 		}
 	}
+}
+
+UC ConfigClass::GetRelayKeys()
+{
+	return(m_config.relay_key_value);
+}
+
+BOOL ConfigClass::SetRelayKeys(const UC _keys)
+{
+	if( m_config.relay_key_value != _keys ) {
+		m_config.relay_key_value = _keys;
+		m_isChanged = true;
+		return true;
+	}
+	return false;
+}
+
+UC ConfigClass::GetRelayKey(const UC _code)
+{
+	return(BITTEST(m_config.relay_key_value, _code));
+}
+
+BOOL ConfigClass::SetRelayKey(const UC _code, const UC _on)
+{
+	UC newValue;
+	if( _on ) newValue = BITSET(m_config.relay_key_value, _code);
+	else newValue = BITUNSET(m_config.relay_key_value, _code);
+
+	if( newValue != m_config.relay_key_value ) {
+		m_config.relay_key_value = newValue;
+		m_isChanged = true;
+		return true;
+	}
+	return false;
 }
 
 BOOL ConfigClass::IsKeyMapItemAvalaible(const UC _code)

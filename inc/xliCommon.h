@@ -122,6 +122,7 @@ typedef enum
   sensorDUST,
   sensorLEAK,
   sensorBEAT,
+  sensorIRKey = 15,
   sensorDHT_h = 16, // won't occupy bit position
   sensorMIC_b
 } sensors_t;

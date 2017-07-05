@@ -23,6 +23,7 @@
  * 1.
 **/
 
+#include "MyMessage.h"
 #include "xlxCloudObj.h"
 #include "xlxLogger.h"
 #include "xlxBLEInterface.h"
@@ -36,7 +37,6 @@ CloudObjClass::CloudObjClass()
   m_SysVersion = "";
   m_nAppVersion = VERSION_CONFIG_DATA;
   m_SysStatus = STATUS_OFF;
-  relay_key_value = 0;
 
   m_temperature.node_id = 0;
   m_temperature.data = 0.0;
@@ -49,6 +49,9 @@ CloudObjClass::CloudObjClass()
 
   m_motion.node_id = 0;
   m_motion.data = false;
+
+  m_irKey.node_id = 0;
+  m_irKey.data = false;
 
   m_sound.node_id = 0;
   m_sound.data = false;
@@ -207,16 +210,27 @@ BOOL CloudObjClass::UpdateBrightness(uint8_t nid, uint8_t value)
   return false;
 }
 
-BOOL CloudObjClass::UpdateMotion(uint8_t nid, bool value)
+BOOL CloudObjClass::UpdateMotion(uint8_t nid, uint8_t sensor, uint8_t value)
 {
-  if( m_motion.data != value || m_motion.node_id != nid ) {
-    m_motion.node_id = nid;
-    m_motion.data = value;
-    OnSensorDataChanged(sensorPIR, nid);
+  if( sensor == S_MOTION || sensor == S_IR ) {
+    if( sensor == S_MOTION ) {
+      if( m_motion.data != value || m_motion.node_id != nid ) {
+        m_motion.node_id = nid;
+        m_motion.data = value;
+        OnSensorDataChanged(sensorPIR, nid);
+      }
+    } else if( sensor == S_IR ) {
+      if( m_irKey.data != value || m_irKey.node_id != nid ) {
+        m_irKey.node_id = nid;
+        m_irKey.data = value;
+        OnSensorDataChanged(sensorIRKey, nid);
+      }
+    }
+
 #ifdef USE_PARTICLE_CLOUD
     // Publis right away
     if( Particle.connected() ) {
-      String strTemp = String::format("{'nd':%d,'PIR':%d}", nid, value);
+      String strTemp = String::format("{'nd':%d,'%s':%d}", nid, (sensor == S_MOTION ? "PIR" : "IRK"), value);
       Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
     }
 #endif
@@ -279,7 +293,7 @@ BOOL CloudObjClass::UpdateSmoke(uint8_t nid, uint16_t value)
   return false;
 }
 
-BOOL CloudObjClass::UpdateSound(uint8_t nid, bool value)
+BOOL CloudObjClass::UpdateSound(uint8_t nid, uint8_t value)
 {
   if( m_sound.data != value || m_sound.node_id != nid ) {
     m_sound.node_id = nid;
