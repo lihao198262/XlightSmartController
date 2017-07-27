@@ -340,8 +340,10 @@ BOOL CloudObjClass::PublishLog(const char *msg)
   }
 #endif
 
+#ifndef DISABLE_BLE
   // Notify via BLE
   //if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_LOGMSG, msg);
+#endif
 
   return rc;
 }
@@ -356,8 +358,10 @@ BOOL CloudObjClass::PublishDeviceStatus(const char *msg)
   }
 #endif
 
+#ifndef DISABLE_BLE
   // Notify via BLE
   if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_DeviceStatus, msg);
+#endif
 
   return rc;
 }
@@ -382,8 +386,10 @@ BOOL CloudObjClass::PublishDeviceConfig(const char *msg)
   }
 #endif
 
+#ifndef DISABLE_BLE
   // Notify via BLE
   if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_DeviceConfig, msg);
+#endif
 
   return rc;
 }
@@ -398,8 +404,10 @@ BOOL CloudObjClass::PublishAlarm(const char *msg)
   }
 #endif
 
+#ifndef DISABLE_BLE
   // Notify via BLE
   if( theBLE.isGood() ) theBLE.sendNotification(CLT_ID_Alarm, msg);
+#endif
 
   return rc;
 }

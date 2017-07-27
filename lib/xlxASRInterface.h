@@ -5,8 +5,7 @@
 
 #include "xliCommon.h"
 
-// Uncommment this to enable ASR
-#define DISABLE_ASR
+#ifndef DISABLE_ASR
 
 class ASRInterfaceClass
 {
@@ -34,5 +33,7 @@ private:
 // Function & Class Helper
 //------------------------------------------------------------------
 extern ASRInterfaceClass theASR;
+
+#endif // DISABLE_ASR
 
 #endif /* xlxASRInterface_h */

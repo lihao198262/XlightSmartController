@@ -153,15 +153,33 @@ typedef enum
 typedef enum
 {
   devtypUnknown = 0,
-  devtypCRing3,     // Color ring - Rainbow
+  // Color ring - Rainbow
+  devtypCRing3,
   devtypCRing2,
-  devtypCRing1,
-  devtypWRing3,     // White ring - Sunny
+  devtypCBar,
+  devtypCFrame,
+  devtypCWave,
+  devtypCRing1 = 31,
+
+  // White ring - Sunny
+  devtypWRing3 = 32,
   devtypWRing2,
-  devtypWRing1,
-  devtypMRing3 = 8, // Color & Motion ring - Mirage
+  devtypWBar,
+  devtypWFrame,
+  devtypWWave,
+  devtypWSquare60,      // 60 * 60
+  devtypWPanel120_30,   // 120 * 30
+  devtypWBlackboard,    // Blackboard lamp
+  devtypWRing1 = 95,
+
+  // Color & Motion ring - Mirage
+  devtypMRing3 = 96,
   devtypMRing2,
-  devtypMRing1,
+  devtypMBar,
+  devtypMFrame,
+  devtypMWave,
+  devtypMRing1 = 127,
+
   devtypDummy = 255
 } devicetype_t;
 
@@ -184,7 +202,7 @@ typedef enum
 // Remote type
 typedef enum
 {
-  remotetypUnknown = 0,
+  remotetypUnknown = 224,
   remotetypRFSimply,
   remotetypRFStandard,
   remotetypRFEnhanced,
@@ -208,7 +226,7 @@ typedef enum
 //--------------------------------------------------
 uint8_t h2i(const char c);
 char* PrintUint64(char *buf, uint64_t value, bool bHex = true);
-char* PrintMacAddress(char *buf, const uint8_t *mac, char delim = ':');
+char* PrintMacAddress(char *buf, const uint8_t *mac, char delim = ':', bool bShort = true);
 uint64_t StringToUInt64(const char *strData);
 inline time_t tmConvert_t(US YYYY, UC MM, UC DD, UC hh, UC mm, UC ss)  // inlined for speed
 {
@@ -222,6 +240,21 @@ inline time_t tmConvert_t(US YYYY, UC MM, UC DD, UC hh, UC mm, UC ss)  // inline
   t.tm_isdst = 0;  // not used
   time_t t_of_day = mktime(&t);
   return t_of_day;
+};
+//////////////////rfscanner///////////////////////
+// I_GET_NONCE sub-type
+enum {
+    SCANNER_PROBE = 0,
+    SCANNER_SETUP_RF,           // by NodeID & SubID
+    SCANNER_SETUPDEV_RF,        // by UniqueID
+
+    SCANNER_GETCONFIG = 8,      // by NodeID & SubID
+    SCANNER_SETCONFIG,
+    SCANNER_GETDEV_CONFIG,      // by UniqueID
+    SCANNER_SETDEV_CONFIG,
+
+    SCANNER_TEST_NODE = 16,     // by NodeID & SubID
+    SCANNER_TEST_DEVICE,        // by UniqueID
 };
 
 #endif /* xliCommon_h */

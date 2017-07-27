@@ -35,6 +35,8 @@
 #include "xlxRF24Server.h"
 #include "xlxSerialConsole.h"
 
+#ifndef DISABLE_BLE
+
 #define BLE_CHIP_HC05             5
 #define BLE_CHIP_HC06             6
 #define BLE_CHIP_TYPE             BLE_CHIP_HC06
@@ -50,6 +52,22 @@
 #endif
 
 #define BLE_BUFER_LENGTH          48
+
+#ifdef PIN_BTN_EXT_1
+#undef PIN_BTN_EXT_1
+#endif
+
+#ifdef PIN_BTN_EXT_2
+#undef PIN_BTN_EXT_2
+#endif
+
+#ifdef PIN_BTN_EXT_3
+#undef PIN_BTN_EXT_3
+#endif
+
+#ifdef PIN_BTN_EXT_4
+#undef PIN_BTN_EXT_4
+#endif
 
 // AT commands for HC-05, ending with \r\n
 // Input              Output
@@ -464,3 +482,5 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
   }
   return false;
 }
+
+#endif // DISABLE_BLE

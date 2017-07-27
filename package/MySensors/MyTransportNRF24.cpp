@@ -19,11 +19,13 @@
 
 #include "MyTransportNRF24.h"
 
-MyTransportNRF24::MyTransportNRF24(uint8_t ce, uint8_t cs, uint8_t paLevel)
+MyTransportNRF24::MyTransportNRF24(uint8_t ce, uint8_t cs, uint8_t channel, uint8_t paLevel, uint8_t dataRate)
 	:
 	MyTransport(),
 	rf24(ce, cs),
-	_paLevel(paLevel)
+	_channel(channel),
+	_paLevel(paLevel),
+	_dataRate(dataRate)
 {
 	// SBS added 2016-06-28
 	_myNetworkID = 0;
@@ -45,9 +47,9 @@ bool MyTransportNRF24::init() {
 	//rf24.setAutoAck(BROADCAST_PIPE,false); // Turn off auto ack for broadcast
 
 	rf24.enableAckPayload();
-	rf24.setChannel(RF24_CHANNEL);
+	rf24.setChannel(_channel);
 	rf24.setPALevel(_paLevel);
-	rf24.setDataRate(RF24_DATARATE);
+	rf24.setDataRate((rf24_datarate_e)_dataRate);
 	rf24.setRetries(5,15);
 	rf24.setCRCLength(RF24_CRC_16);
 	rf24.enableDynamicPayloads(false);
@@ -59,6 +61,13 @@ bool MyTransportNRF24::init() {
 	rf24.openReadingPipe(BROADCAST_PIPE, TO_ADDR(RF24_BASE_RADIO_ID, BROADCAST_ADDRESS));
 	_bValid = true;
 	return true;
+}
+
+bool MyTransportNRF24::init(uint8_t channel, uint8_t paLevel, uint8_t dataRate) {
+	_channel = channel;
+	_paLevel = paLevel;
+	_dataRate = dataRate;
+	return init();
 }
 
 void MyTransportNRF24::setAddress(uint8_t address, uint64_t network) {
@@ -129,8 +138,9 @@ bool MyTransportNRF24::isValid() {
 
 bool MyTransportNRF24::CheckConfig()
 {
-	if( rf24.getChannel() != RF24_CHANNEL ) return false;
-	if( rf24.getDataRate() != RF24_DATARATE ) return false;
+	if( rf24.getChannel() != _channel ) return false;
+	if( rf24.getDataRate() != _dataRate ) return false;
+	if( rf24.getPALevel() != _paLevel ) return false;
 	if( rf24.getCRCLength() != RF24_CRC_16 ) return false;
 	return true;
 }
@@ -157,7 +167,7 @@ bool MyTransportNRF24::send(uint8_t to, const void* data, uint8_t len, uint8_t p
 	rf24.powerUp();
 	rf24.stopListening();
 	if( _address == GATEWAY_ADDRESS && pipe == CURRENT_NODE_PIPE ) {
-		if( !_bBaseNetworkEnabled ) {
+		if( !_bBaseNetworkEnabled && to != NODEID_RF_SCANNER) {
 			rf24.startListening();
 			return false;
 		}
@@ -183,15 +193,18 @@ bool MyTransportNRF24::available(uint8_t *to, uint8_t *pipe) {
 	//(void)avail; //until somebody makes use of 'avail'
 	// SBS added 2016-07-21
 	if( pipe ) *pipe = lv_pipe;
+	//if(lv_pipe != 255)
+	//  Serial.printf("avai data pipe = %d\r\n",lv_pipe);
 	if (lv_pipe == CURRENT_NODE_PIPE)
 	{
-		*to = _address;
-		if( _address == GATEWAY_ADDRESS && !_bBaseNetworkEnabled ) {
+		*to = BASESERVICE_ADDRESS;
+		//if( _address == GATEWAY_ADDRESS && !_bBaseNetworkEnabled ) {
 			// Discard message due to disabled BaseNetwork
-			UC lv_pData[MAX_MESSAGE_LENGTH];
-			receive(lv_pData);
-			return false;
-		}
+			//UC lv_pData[MAX_MESSAGE_LENGTH];
+			//receive(lv_pData);
+			//if(lv_pData[1] == NODEID_RF_SCANNER) return true;
+			//return false;
+		//}
 	}
 	else if(lv_pipe == PRIVATE_NET_PIPE)
 		*to = _address;
@@ -211,6 +224,22 @@ void MyTransportNRF24::powerDown() {
 	rf24.powerDown();
 }
 
+uint8_t MyTransportNRF24::getChannel(bool read)
+{
+	if( read ) {
+		_channel = rf24.getChannel();
+	}
+	return _channel;
+}
+
+void MyTransportNRF24::setChannel(uint8_t channel)
+{
+	if( _channel != channel )	{
+		_channel = channel;
+		rf24.setChannel(channel);
+	}
+}
+
 uint8_t MyTransportNRF24::getPALevel(bool read)
 {
 	if( read ) {
@@ -225,4 +254,21 @@ void MyTransportNRF24::setPALevel(uint8_t level)
 		_paLevel = level;
 		rf24.setPALevel(level);
 	}
+}
+
+uint8_t MyTransportNRF24::getDataRate(bool read)
+{
+	if( read ) {
+		_dataRate = (uint8_t)rf24.getDataRate();
+	}
+	return _dataRate;
+}
+
+bool MyTransportNRF24::setDataRate(uint8_t speed)
+{
+	if( _dataRate != speed )	{
+		_dataRate = speed;
+		return rf24.setDataRate((rf24_datarate_e)speed);
+	}
+	return true;
 }

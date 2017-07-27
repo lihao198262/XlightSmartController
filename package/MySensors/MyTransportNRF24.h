@@ -39,8 +39,9 @@
 class MyTransportNRF24 : public MyTransport
 {
 public:
-	MyTransportNRF24(uint8_t ce=RF24_CE_PIN, uint8_t cs=RF24_CS_PIN, uint8_t paLevel=RF24_PA_LEVEL);
+	MyTransportNRF24(uint8_t ce=RF24_CE_PIN, uint8_t cs=RF24_CS_PIN, uint8_t channel=RF24_CHANNEL, uint8_t paLevel=RF24_PA_LEVEL, uint8_t dataRate=RF24_DATARATE);
 	bool init();
+	bool init(uint8_t channel, uint8_t paLevel, uint8_t dataRate);
 	void setAddress(uint8_t address, uint64_t network);
 	uint8_t getAddress();
 	bool send(uint8_t to, const void* data, uint8_t len, uint8_t pipe = 255);
@@ -48,8 +49,13 @@ public:
 	bool available(uint8_t *to, uint8_t *pipe = NULL);
 	uint8_t receive(void* data);
 	void powerDown();
+
+	uint8_t getChannel(bool read = true);
+	void setChannel(uint8_t channel);
 	uint8_t getPALevel(bool read = true);
 	void setPALevel(uint8_t level);
+	uint8_t getDataRate(bool read = true);
+	bool setDataRate(uint8_t speed);
 
 	// SBS added 2016-06-28
 	uint64_t getCurrentNetworkID() const;
@@ -68,7 +74,9 @@ public:
 private:
 	RF24 rf24;
 	uint8_t _address;
+	uint8_t _channel;
 	uint8_t _paLevel;
+	uint8_t _dataRate;
 
 	// SBS added 2016-06-28
 	uint64_t _currentNetworkID;

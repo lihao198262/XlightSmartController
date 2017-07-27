@@ -5,6 +5,8 @@
 
 #include "xliCommon.h"
 
+#ifndef DISABLE_BLE
+
 class BLEInterfaceClass
 {
 public:
@@ -44,5 +46,7 @@ private:
 // Function & Class Helper
 //------------------------------------------------------------------
 extern BLEInterfaceClass theBLE;
+
+#endif // DISABLE_BLE
 
 #endif /* xlxBLEInterface_h */

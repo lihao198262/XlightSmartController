@@ -123,7 +123,7 @@ void NodeListClass::publishNode(NodeIdRow_t _node)
 
 	UL lv_now = Time.now();
 	strTemp = String::format("{'nd':%d,'mac':'%s','device':%d,'recent':%d}", _node.nid,
-			PrintMacAddress(strDisplay, _node.identity), _node.device,
+			PrintMacAddress(strDisplay, _node.identity, false), _node.device,
 			(_node.recentActive > 0 ? lv_now - _node.recentActive : -1));
 	theSys.PublishDeviceConfig(strTemp.c_str());
 }
@@ -157,7 +157,7 @@ void NodeListClass::showList(BOOL toCloud, UC nid)
 			} else {
 				SERIAL_LN("%cNo.%d - NodeID: %d (%s) actived %ds ago associated device: %d",
 						_pItems[i].nid == CURRENT_DEVICE ? '*' : ' ', i,
-				    _pItems[i].nid, PrintMacAddress(strDisplay, _pItems[i].identity),
+				    _pItems[i].nid, PrintMacAddress(strDisplay, _pItems[i].identity, false),
 						(_pItems[i].recentActive > 0 ? lv_now - _pItems[i].recentActive : -1),
 					  _pItems[i].device);
 			}
@@ -359,7 +359,9 @@ void ConfigClass::InitConfig()
 	SetSensorEnabled(sensorPIR);
   strcpy(m_config.Organization, XLA_ORGANIZATION);
   strcpy(m_config.ProductName, XLA_PRODUCT_NAME);
+#if VERSION_CONFIG_DATA <= 24
   strcpy(m_config.Token, XLA_TOKEN);
+#endif
 	strcpy(m_config.bleName, XLIGHT_BLE_SSID);
 	strcpy(m_config.blePin, XLIGHT_BLE_PIN);
 	strcpy(m_config.pptAccessCode, XLIGHT_BLE_PIN);
@@ -373,7 +375,9 @@ void ConfigClass::InitConfig()
 	m_config.enableSpeaker = false;
 	m_config.fixedNID = true;
 	m_config.enableDailyTimeSync = true;
+	m_config.rfChannel = RF24_CHANNEL;
 	m_config.rfPowerLevel = RF24_PA_LEVEL_GW;
+	m_config.rfDataRate = RF24_DATARATE;
 	m_config.maxBaseNetworkDuration = MAX_BASE_NETWORK_DUR;
 	m_config.useCloud = CLOUD_ENABLE;
 	m_config.stWiFi = 1;
@@ -383,6 +387,9 @@ void ConfigClass::InitConfig()
 	m_config.tmLoopKC = RTE_TM_LOOP_KEYCODE;
 	memset(m_config.asrSNT, 0x00, MAX_ASR_SNT_ITEMS);
 	memset(m_config.keyMap, 0x00, MAX_KEY_MAP_ITEMS * sizeof(HardKeyMap_t));
+	for(UC _btn = 0; _btn < MAX_NUM_BUTTONS; _btn++ ) {
+		SetExtBtnAction(_btn, 0, DEVICE_SW_TOGGLE, 0x01 << _btn);
+	}
 }
 
 BOOL ConfigClass::InitDevStatus(UC nodeID)
@@ -690,6 +697,7 @@ void ConfigClass::SetProductName(const char *strName)
   m_isChanged = true;
 }
 
+#if VERSION_CONFIG_DATA <= 24
 String ConfigClass::GetToken()
 {
   String strName = m_config.Token;
@@ -701,6 +709,7 @@ void ConfigClass::SetToken(const char *strName)
   strncpy(m_config.Token, strName, sizeof(m_config.Token) - 1);
   m_isChanged = true;
 }
+#endif
 
 String ConfigClass::GetBLEName()
 {
@@ -710,10 +719,12 @@ String ConfigClass::GetBLEName()
 
 void ConfigClass::SetBLEName(const char *strName)
 {
+#ifndef DISABLE_BLE
 	if( theBLE.setName(strName) ) {
 		strncpy(m_config.bleName, strName, sizeof(m_config.bleName) - 1);
 	  m_isChanged = true;
 	}
+#endif
 }
 
 String ConfigClass::GetBLEPin()
@@ -724,10 +735,12 @@ String ConfigClass::GetBLEPin()
 
 void ConfigClass::SetBLEPin(const char *strPin)
 {
+#ifndef DISABLE_BLE
 	if( theBLE.setPin(strPin) ) {
 		strncpy(m_config.blePin, strPin, sizeof(m_config.blePin) - 1);
 	  m_isChanged = true;
 	}
+#endif
 }
 
 String ConfigClass::GetPPTAccessCode()
@@ -1084,6 +1097,40 @@ BOOL ConfigClass::SetTimeLoopKC(UC _value)
   return false;
 }
 
+UC ConfigClass::GetRFChannel()
+{
+	return m_config.rfChannel;
+}
+
+BOOL ConfigClass::SetRFChannel(UC channel)
+{
+	if( channel > 127 ) channel = RF24_CHANNEL;
+	if( channel != m_config.rfChannel ) {
+		m_config.rfChannel = channel;
+		theRadio.setChannel(channel);
+		m_isChanged = true;
+		return true;
+	}
+	return false;
+}
+
+UC ConfigClass::GetRFDataRate()
+{
+	return m_config.rfDataRate;
+}
+
+BOOL ConfigClass::SetRFDataRate(UC dataRate)
+{
+	if( dataRate > RF24_250KBPS ) dataRate = RF24_DATARATE;
+	if( dataRate != m_config.rfDataRate ) {
+		m_config.rfDataRate = dataRate;
+		theRadio.setDataRate(dataRate);
+		m_isChanged = true;
+		return true;
+	}
+	return false;
+}
+
 UC ConfigClass::GetRFPowerLevel()
 {
 	return m_config.rfPowerLevel;
@@ -1091,7 +1138,7 @@ UC ConfigClass::GetRFPowerLevel()
 
 BOOL ConfigClass::SetRFPowerLevel(UC level)
 {
-	if( level > RF24_PA_MAX ) level = RF24_PA_MAX;
+	if( level > RF24_PA_MAX ) level = RF24_PA_LEVEL_GW;
 	if( level != m_config.rfPowerLevel ) {
 		m_config.rfPowerLevel = level;
 		theRadio.setPALevel(level);
@@ -1258,6 +1305,56 @@ void ConfigClass::showKeyMap()
 			SERIAL_LN("Key%d: %d-%d %s", _code + 1, m_config.keyMap[_code].nid,
 					m_config.keyMap[_code].subID,
 					theSys.relay_get_key(_code + 1) ? "on" : "off");
+		}
+	}
+}
+
+BOOL ConfigClass::SetExtBtnAction(const UC _btn, const UC _opt, const UC _act, const UC _keymap)
+{
+	if( _btn < MAX_NUM_BUTTONS && _opt < MAX_BTN_OP_TYPE ) {
+		if( m_config.btnAction[_btn][_opt].action != _act || m_config.btnAction[_btn][_opt].keyMap != _keymap ) {
+			m_config.btnAction[_btn][_opt].action = _act;
+			m_config.btnAction[_btn][_opt].keyMap = _keymap;
+			m_isChanged = true;
+			return true;
+		}
+	}
+	return false;
+}
+
+BOOL ConfigClass::ExecuteBtnAction(const UC _btn, const UC _opt)
+{
+	UC _key;
+	bool _st;
+	if( _btn < MAX_NUM_BUTTONS && _opt < MAX_BTN_OP_TYPE ) {
+		if( m_config.btnAction[_btn][_opt].keyMap > 0 ) {
+			// scan key map and act on keys one by one
+			for( UC idx = 0; idx < 8; idx++ ) {
+				// Check key map
+				if( BITTEST(m_config.btnAction[_btn][_opt].keyMap, idx) ) {
+					_key = idx + 1;
+					_st = (m_config.btnAction[_btn][_opt].action == DEVICE_SW_TOGGLE ? !(theSys.relay_get_key(_key)) : m_config.btnAction[_btn][_opt].action == DEVICE_SW_ON);
+					//SERIAL_LN("test: btn:%d opt:%d set key:%d to %d", _btn, _opt, _key, _st);
+					theSys.relay_set_key(_key, _st);
+				}
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void ConfigClass::showButtonActions()
+{
+	SERIAL_LN("\n\r**Ext Buttons**");
+	for( UC _btn = 0; _btn < MAX_NUM_BUTTONS; _btn++ ) {
+		for( UC _opt = 0; _opt < MAX_BTN_OP_TYPE; _opt++ ) {
+			if( m_config.btnAction[_btn][_opt].keyMap > 0 ) {
+				SERIAL_LN("btn%d(%d): 0x%02X-0x%02X", _btn, _opt,
+						m_config.btnAction[_btn][_opt].action,
+						m_config.btnAction[_btn][_opt].keyMap);
+			}
 		}
 	}
 }

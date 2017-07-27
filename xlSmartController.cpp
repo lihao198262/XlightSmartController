@@ -35,6 +35,7 @@
 
 #include "Adafruit_DHT.h"
 #include "ArduinoJson.h"
+#include "clickButton.h"
 //#include "LightSensor.h"
 //#include "MotionSensor.h"
 #include "TimeAlarms.h"
@@ -48,6 +49,29 @@ SmartControllerClass theSys;
 DHT senDHT(PIN_SEN_DHT, SEN_TYPE_DHT);
 //LightSensor senLight(PIN_SEN_LIGHT);
 //MotionSensor senMotion(PIN_SEN_PIR);
+
+// Ext. buttons
+#ifdef DISABLE_BLE
+#ifdef PIN_BTN_EXT_1
+#define EN_BTN_EXT_1
+	ClickButton btnExt1(PIN_BTN_EXT_1, LOW, CLICKBTN_PULLUP);
+#endif
+
+#ifdef PIN_BTN_EXT_2
+#define EN_BTN_EXT_2
+	ClickButton btnExt2(PIN_BTN_EXT_2, LOW, CLICKBTN_PULLUP);
+#endif
+
+#ifdef PIN_BTN_EXT_3
+#define EN_BTN_EXT_3
+	ClickButton btnExt3(PIN_BTN_EXT_3, LOW, CLICKBTN_PULLUP);
+#endif
+
+#ifdef PIN_BTN_EXT_4
+#define EN_BTN_EXT_4
+	ClickButton btnExt4(PIN_BTN_EXT_4, LOW, CLICKBTN_PULLUP);
+#endif
+#endif
 
 //------------------------------------------------------------------
 // Alarm Triggered Actions
@@ -80,6 +104,7 @@ SmartControllerClass::SmartControllerClass()
 	m_isWAN = false;
 	m_loopKeyCode = 0;
 	m_tickLoopKeyCode = 0;
+	m_relaykeyflag = 0x00;
 }
 
 // Primitive initialization before loading configuration
@@ -105,9 +130,10 @@ void SmartControllerClass::Init()
 	theLog.Init(m_SysID);
 	theLog.InitFlash(MEM_OFFLINE_DATA_OFFSET, MEM_OFFLINE_DATA_LEN);
 
+#ifndef DISABLE_ASR
 	// Open ASR Interface
 	theASR.Init(SERIALPORT_SPEED_LOW);
-
+#endif
 	LOGN(LOGTAG_MSG, "SmartController is starting...SysID=%s", m_SysID.c_str());
 }
 
@@ -127,8 +153,10 @@ void SmartControllerClass::InitRadio()
   	}
   }
 
+#ifndef DISABLE_BLE
 	// Open BLE Interface
   theBLE.Init(PIN_BLE_STATE, PIN_BLE_EN);
+#endif
 }
 
 // Third level initialization after loading configuration
@@ -171,20 +199,8 @@ void SmartControllerClass::InitNetwork()
 // Initialize Pins: check the routine with PCB
 void SmartControllerClass::InitPins()
 {
-	// Set Panel pin mode
-#ifdef MCU_TYPE_P1
-	pinMode(PIN_BTN_SETUP, INPUT);
-	pinMode(PIN_BTN_RESET, INPUT);
-	pinMode(PIN_LED_RED, OUTPUT);
-	pinMode(PIN_LED_GREEN, OUTPUT);
-	pinMode(PIN_LED_BLUE, OUTPUT);
-#endif
-
 	// Workaround for Paricle Analog Pin mode problem
 #ifndef MCU_TYPE_Particle
-	pinMode(PIN_BTN_UP, INPUT);
-	pinMode(PIN_BTN_OK, INPUT);
-
 	// Set Sensors pin Mode
 	//pinModes are already defined in the ::begin() method of each sensor library, may need to be ommitted from here
 	pinMode(PIN_SEN_DHT, INPUT);
@@ -193,21 +209,50 @@ void SmartControllerClass::InitPins()
 //	pinMode(PIN_SEN_PIR, INPUT);
 #endif
 
-	// Brightness level indicator to LS138
-	//pinMode(PIN_LED_LEVEL_B0, OUTPUT);
-	//pinMode(PIN_LED_LEVEL_B1, OUTPUT);
-	//pinMode(PIN_LED_LEVEL_B2, OUTPUT);
-
+#ifndef DISABLE_BLE
 	// Set communication pin mode
 	pinMode(PIN_BLE_RX, INPUT);
 	pinMode(PIN_BLE_TX, OUTPUT);
+#endif
 
 	// Init soft keys
+#ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 	pinMode(PIN_SOFT_KEY_1, OUTPUT);
 #endif
+#ifdef PIN_SOFT_KEY_4
+	pinMode(PIN_SOFT_KEY_4, OUTPUT);
+#endif
+#endif
 #ifdef PIN_SOFT_KEY_2
 	pinMode(PIN_SOFT_KEY_2, OUTPUT);
+#endif
+#ifdef PIN_SOFT_KEY_3
+	pinMode(PIN_SOFT_KEY_3, OUTPUT);
+#endif
+
+#ifdef EN_BTN_EXT_1
+	btnExt1.debounceTime   = 30;   // Debounce timer in ms
+	btnExt1.multiclickTime = 500;  // Time limit for multi clicks
+	btnExt1.longClickTime  = 2000; // time until "held-down clicks" register
+#endif
+
+#ifdef EN_BTN_EXT_2
+	btnExt2.debounceTime   = 30;   // Debounce timer in ms
+	btnExt2.multiclickTime = 500;  // Time limit for multi clicks
+	btnExt2.longClickTime  = 2000; // time until "held-down clicks" register
+#endif
+
+#ifdef EN_BTN_EXT_3
+	btnExt3.debounceTime   = 30;   // Debounce timer in ms
+	btnExt3.multiclickTime = 500;  // Time limit for multi clicks
+	btnExt3.longClickTime  = 2000; // time until "held-down clicks" register
+#endif
+
+#ifdef EN_BTN_EXT_4
+	btnExt4.debounceTime   = 30;   // Debounce timer in ms
+	btnExt4.multiclickTime = 500;  // Time limit for multi clicks
+	btnExt4.longClickTime  = 2000; // time until "held-down clicks" register
 #endif
 
 	// Init Panel components
@@ -376,10 +421,12 @@ void SmartControllerClass::ResetSerialPort()
 BOOL SmartControllerClass::CheckRF()
 {
 	// RF Server begins
-	m_isRF = theRadio.ServerBegin();
+	m_isRF = theRadio.ServerBegin(theConfig.GetRFChannel(), theConfig.GetRFPowerLevel(), theConfig.GetRFDataRate());
 	if( m_isRF ) {
 		// Change it if setting is not default value
-		theRadio.setPALevel(theConfig.GetRFPowerLevel());
+		//theRadio.setChannel(theConfig.GetRFChannel());
+		//theRadio.setPALevel(theConfig.GetRFPowerLevel());
+		//theRadio.setDataRate(theConfig.GetRFDataRate());
 		m_isRF = theRadio.CheckConfig();
 	}
 	return m_isRF;
@@ -451,6 +498,9 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 	if( tickSaveConfig % (2000 / ms) == 0 ) { // every 2 second
 		CheckDevTimeout();
 	}
+
+	// Publish relay key status if changed
+	PublishRelayKeyFlag();
 
   // Slow Checking: once per 60 seconds
   if (++tickCheckRadio > 60000 / ms) {
@@ -543,7 +593,11 @@ BOOL SmartControllerClass::IsRFGood()
 
 BOOL SmartControllerClass::IsBLEGood()
 {
+#ifndef DISABLE_BLE
 	return theBLE.isGood();
+#else
+	return false;
+#endif
 }
 
 BOOL SmartControllerClass::IsLANGood()
@@ -567,8 +621,10 @@ void SmartControllerClass::ProcessLocalCommands() {
 	// Process Console Command
   theConsole.processCommand();
 
+#ifndef DISABLE_BLE
 	// Process BLE commands
   theBLE.processCommand();
+#endif
 }
 
 // Process all kinds of commands
@@ -577,8 +633,10 @@ void SmartControllerClass::ProcessCommands()
 	// Process Local Bridge Commands
 	ProcessLocalCommands();
 
+#ifndef DISABLE_ASR
 	// Process ASR Command
 	theASR.processCommand();
+#endif
 
 	// Process Cloud Commands
 	ProcessCloudCommands();
@@ -863,19 +921,21 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 	else if( _key >= 1 && _key <= 8 ) keyID = _key;
 
 	if( keyID == 1 ) {
+#ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
 		// Update bitmap
-		theConfig.SetRelayKey(keyID - 1, _on);
+		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;
+#endif
 #endif
 	} else if( keyID == 2 ) {
 #ifdef PIN_SOFT_KEY_2
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_2, _on ? HIGH : LOW);
 		// Update bitmap
-		theConfig.SetRelayKey(keyID - 1, _on);
+		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;
 #endif
 	} else if( keyID == 3 ) {
@@ -883,24 +943,28 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_3, _on ? HIGH : LOW);
 		// Update bitmap
-		theConfig.SetRelayKey(keyID - 1, _on);
+		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;
 #endif
 	} else if( keyID == 4 ) {
+#ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_4
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_4, _on ? HIGH : LOW);
 		// Update bitmap
-		theConfig.SetRelayKey(keyID - 1, _on);
+		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;
+#endif
 #endif
 	}
 
+/*
+	// move to SelfCheck() due to conflict
 	if( rc ) {
 		String strTemp = String::format("{'km':%d,'on':%d}", keyID, _on);
 		PublishDeviceStatus(strTemp.c_str());
 	}
-
+*/
   return rc;
 }
 
@@ -912,11 +976,83 @@ void SmartControllerClass::relay_restore_keystate()
 	}
 }
 
+void SmartControllerClass::ExtButtonProcess()
+{
+	int func = 0;
+
+#ifdef EN_BTN_EXT_1
+	// Update button state
+	btnExt1.Update();
+	func = btnExt1.clicks;
+	switch( func ) {
+	case 1:			// click
+		theConfig.ExecuteBtnAction(0, 0);
+		break;
+	case -1:		// long-click
+		theConfig.ExecuteBtnAction(0, 1);
+		break;
+	case 2:			// double-click
+		break;
+	}
+#endif
+
+#ifdef EN_BTN_EXT_2
+	// Update button state
+	btnExt2.Update();
+	func = btnExt2.clicks;
+	switch( func ) {
+	case 1:			// click
+		theConfig.ExecuteBtnAction(1, 0);
+		break;
+	case -1:		// long-click
+		theConfig.ExecuteBtnAction(1, 1);
+		break;
+	case 2:			// double-click
+		break;
+	}
+#endif
+
+#ifdef EN_BTN_EXT_3
+	// Update button state
+	btnExt3.Update();
+	func = btnExt3.clicks;
+	switch( func ) {
+	case 1:			// click
+		theConfig.ExecuteBtnAction(2, 0);
+		break;
+	case -1:		// long-click
+		theConfig.ExecuteBtnAction(2, 1);
+		break;
+	case 2:			// double-click
+		break;
+	}
+#endif
+
+#ifdef EN_BTN_EXT_4
+	// Update button state
+	btnExt4.Update();
+	func = btnExt4.clicks;
+	switch( func ) {
+	case 1:			// click
+		theConfig.ExecuteBtnAction(3, 0);
+		break;
+	case -1:		// long-click
+		theConfig.ExecuteBtnAction(3, 1);
+		break;
+	case 2:			// double-click
+		break;
+	}
+#endif
+}
+
 // High speed system timer process
 void SmartControllerClass::FastProcess()
 {
 	// Refresh Encoder
 	thePanel.EncoderAvailable();
+
+	// Update ext. buttons
+	ExtButtonProcess();
 
 	// ToDo:
 }
@@ -1154,7 +1290,7 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("SNT_id")) {
 				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
 				const int SNT_uid = (*m_jpCldCmd)["SNT_id"].as<int>();
-				return ChangeLampScenario((UC)node_id, (UC)SNT_uid);
+				return ChangeLampScenario((UC)node_id, (UC)SNT_uid, sub_id);
 			}
 		}
 		//COMMAND 6: Query Device Status
@@ -1184,7 +1320,7 @@ int SmartControllerClass::ExeJSONCommand(String jsonCmd)
 				return theRadio.ProcessSend(strCmd, 0, sub_id);
 			}
 		}
-		//COMMAND 8: Externed funcions of special node, e.g. Key Simulator (nd=129)
+		//COMMAND 8: Extended funcions of special node, e.g. Key Simulator (nd=129)
 		else if (_cmd == CMD_EXT) {
 			if ((*m_jpCldCmd).containsKey("nd") && (*m_jpCldCmd).containsKey("msg")) {
 				const int node_id = (*m_jpCldCmd)["nd"].as<int>();
@@ -1500,6 +1636,8 @@ bool SmartControllerClass::ParseCmdRow(JsonObject& data)
 					theConfig.SetHardwareSwitch(data["hwsw"] > 0);
 				} else if( data.containsKey("km") && data.containsKey("nd") ) {
 					theConfig.SetKeyMapItem((UC)data["km"], (UC)data["nd"], (UC)(data.containsKey("sid") ? data["sid"].as<int>() : 0));
+				} else if( data.containsKey("btn") && data.containsKey("op") && data.containsKey("act") && data.containsKey("km")) {
+					theConfig.SetExtBtnAction((UC)data["btn"], (UC)data["op"], (UC)data["act"], (UC)data["km"]);
 				} else if( data.containsKey("nd") ) {
 					UC node_id = (UC)data["nd"];
 					if( data.containsKey("new_id") ) {
@@ -3274,4 +3412,31 @@ UC SmartControllerClass::CreateColorPayload(UC *payl, uint8_t ring, uint8_t Stat
 	}
 
 	return payl_len;
+}
+
+void SmartControllerClass::SetRelayKeyFlag(const UC _code, const bool _on)
+{
+	theConfig.SetRelayKey(_code, _on);
+	if( _on ) m_relaykeyflag = BITSET(m_relaykeyflag, _code);
+	else m_relaykeyflag = BITUNSET(m_relaykeyflag, _code);
+	m_relaykeyflag = BITSET(m_relaykeyflag, _code + 4);
+}
+
+void SmartControllerClass::PublishRelayKeyFlag()
+{
+	String strTemp = "";
+	for( UC i = 0; i < MAX_KEY_MAP_ITEMS; i++ ) {
+		if( BITTEST(m_relaykeyflag, i + 4) ) {
+			if( strTemp.length() == 0 ) {
+				strTemp = String::format("{'km%d':%d", i+1, BITTEST(m_relaykeyflag, i));
+			} else {
+				strTemp += String::format(",'km%d':%d", i+1, BITTEST(m_relaykeyflag, i));
+			}
+			m_relaykeyflag = BITUNSET(m_relaykeyflag, i + 4);
+		}
+	}
+	if( strTemp.length() > 0 ) {
+		strTemp += "}";
+		PublishDeviceStatus(strTemp.c_str());
+	}
 }

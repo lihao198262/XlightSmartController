@@ -50,11 +50,19 @@ char* PrintUint64(char *buf, uint64_t value, bool bHex) {
 	return buf;
 }
 
-char* PrintMacAddress(char *buf, const uint8_t *mac, char delim)
+char* PrintMacAddress(char *buf, const uint8_t *mac, char delim, bool bShort)
 {
 	if (buf != NULL) {
-		sprintf(buf, "%02X%c%02X%c%02X%c%02X%c%02X%c%02X",
-				mac[0], delim, mac[1], delim, mac[2], delim, mac[3], delim, mac[4], delim, mac[5]);
+		if( bShort ) {
+			// 6 sections
+			sprintf(buf, "%02X%c%02X%c%02X%c%02X%c%02X%c%02X",
+					mac[0], delim, mac[1], delim, mac[2], delim, mac[3], delim, mac[4], delim, mac[5]);
+		} else {
+			// 8 sections
+			sprintf(buf, "%02X%c%02X%c%02X%c%02X%c%02X%c%02X%c%02X%c%02X",
+					mac[0], delim, mac[1], delim, mac[2], delim, mac[3], delim, mac[4], delim, mac[5],
+					delim, mac[7], delim, mac[7]);
+		}
   }
 
   return buf;

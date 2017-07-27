@@ -13,7 +13,7 @@ class RF24ServerClass : public MyTransportNRF24, public CDataQueue, public CFast
 public:
   RF24ServerClass(uint8_t ce=RF24_CE_PIN, uint8_t cs=RF24_CS_PIN, uint8_t paLevel=RF24_PA_LEVEL_GW);
 
-  bool ServerBegin();
+  bool ServerBegin(uint8_t channel, uint8_t paLevel, uint8_t dataRate);
   uint64_t GetNetworkID(bool _full = false);
   void SetRole_Gateway();
   bool ChangeNodeID(const uint8_t bNodeID);
@@ -23,6 +23,11 @@ public:
   bool ProcessSend(MyMessage *pMsg = NULL);
   bool SendNodeConfig(UC _node, UC _ncf, unsigned int _value);
   bool SendNodeConfig(UC _node, UC _ncf, UC *_data, const UC _len);
+
+  //////////////////rfscanner//////////////////////////
+  bool MsgScanner_ProbeAck();
+  void Process_SetupRF(const UC *rfData,uint8_t rflen);
+  /////////////////rfscanner//////////////////////////
 
   bool ProcessMQ();
   bool ProcessSendMQ();

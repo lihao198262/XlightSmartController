@@ -62,10 +62,10 @@ RF24ServerClass::RF24ServerClass(uint8_t ce, uint8_t cs, uint8_t paLevel)
 	_received = 0;
 }
 
-bool RF24ServerClass::ServerBegin()
+bool RF24ServerClass::ServerBegin(uint8_t channel, uint8_t paLevel, uint8_t dataRate)
 {
   // Initialize RF module
-	if( !init() ) {
+	if( !init(channel, paLevel, dataRate) ) {
     LOGC(LOGTAG_MSG, "RF24 module is not valid!");
 		return false;
 	}
@@ -483,6 +483,10 @@ bool RF24ServerClass::PeekMessage()
 
 	while (available(&to, &pipe)) {
 		len = receive(lv_pData);
+		if( to == BASESERVICE_ADDRESS && !isBaseNetworkEnabled() ) {
+			// Discard device message due to disabled BaseNetwork expect rfscanner
+			if( lv_msg.getSender() != NODEID_RF_SCANNER ) continue;
+		}
 
 		// rough check
 	  if( len < HEADER_SIZE )
@@ -574,6 +578,24 @@ bool RF24ServerClass::ProcessReceiveMQ()
 						msgReady = true;
 					}
 				}
+				else if( msgType == I_GET_NONCE ) {
+      // RF Scanner Probe
+        if( replyTo == NODEID_RF_SCANNER ) {
+          if( payload[0] == SCANNER_PROBE ) {
+            MsgScanner_ProbeAck();
+          } else if( payload[0] == SCANNER_SETUP_RF ) {
+						transTo = msg.getDestination();
+						if(transTo == NODEID_GATEWAY)
+              Process_SetupRF(payload + 1,payl_len-1);
+          }
+					else if( payload[0] == SCANNER_SETUPDEV_RF ) {
+						uint8_t mac[6] = {0};
+						WiFi.macAddress(mac);
+						if(isIdentityEqual(payload + 1,mac,sizeof(mac)))
+						  Process_SetupRF(payload + 1 + LEN_NODE_IDENTITY, payl_len - 1 - LEN_NODE_IDENTITY);
+          }
+        }
+      }
 	      break;
 
 			case C_PRESENTATION:
@@ -733,12 +755,14 @@ bool RF24ServerClass::ProcessReceiveMQ()
 				if( transTo == NODEID_PROJECTOR ) {
 					// PPT control
 					if( msgType == V_STATUS ) {
+#ifndef DISABLE_BLE
 						// Keep payload unchanged
 						msg.build(replyTo, transTo, _sensor, C_SET, msgType, _needAck, _bIsAck, true);
 						// Convert to serial format
 						memset(strDisplay, 0x00, sizeof(strDisplay));
 						msg.getSerialString(strDisplay);
 						if( theBLE.isGood() ) theBLE.sendCommand(strDisplay);
+#endif
 					}
 				} else if( transTo == NODEID_KEYSIMULATOR ) {
 					// Transfer message to Key Simuluator, use _sensor to identify subID
@@ -808,6 +832,8 @@ bool RF24ServerClass::ProcessSendMQ()
 				// Determine pipe
 				if( lv_msg.getCommand() == C_INTERNAL && lv_msg.getType() == I_ID_RESPONSE && lv_msg.isAck() ) {
 					pipe = CURRENT_NODE_PIPE;
+				} else if(lv_msg.getType() == I_GET_NONCE_RESPONSE && lv_msg.getDestination() == NODEID_RF_SCANNER)	{
+					pipe = CURRENT_NODE_PIPE;
 				} else {
 					pipe = PRIVATE_NET_PIPE;
 				}
@@ -837,4 +863,76 @@ bool RF24ServerClass::ProcessSendMQ()
 	}
 
 	return true;
+}
+
+
+//////////////////rfscanner//////////////////////////
+bool RF24ServerClass::MsgScanner_ProbeAck()
+{
+	MyMessage lv_msg;
+	lv_msg.build(NODEID_GATEWAY, NODEID_RF_SCANNER, 0x00, C_INTERNAL, I_GET_NONCE_RESPONSE, false, true);
+	uint8_t payl_len = LEN_NODE_IDENTITY + 1;
+	// Common payload
+	uint8_t playdata[MAX_PAYLOAD + 1] = {0};
+	playdata[0] = SCANNER_PROBE;
+	uint8_t mac[6];
+  WiFi.macAddress(mac);
+	memcpy(playdata + 1, mac, sizeof(mac));
+  playdata[payl_len++] = theConfig.GetVersion();
+	playdata[payl_len++] = XLIGHT_EDITION_ID; // type
+	playdata[payl_len++] = NODEID_GATEWAY;
+	playdata[payl_len++] = 0; // subid ignore
+	playdata[payl_len++] = theConfig.GetRFChannel();
+	playdata[payl_len++] = (theConfig.GetRFDataRate() << 2) + theConfig.GetRFPowerLevel();
+	uint64_t networkid = theRadio.getCurrentNetworkID();
+	memcpy(playdata + payl_len, (uint8_t *)&networkid, 6);
+	payl_len += 6;
+  lv_msg.set(playdata, payl_len);
+	return ProcessSend(&lv_msg);
+}
+
+void RF24ServerClass::Process_SetupRF(const UC *rfData,uint8_t rflen)
+{
+  if(rflen > 0 &&(*rfData)>=0 && (*rfData)<=127)
+	{
+		if(theConfig.GetRFChannel() != (*rfData))
+		{
+			theConfig.SetRFChannel(*rfData);
+		}
+	}
+	rfData++;
+	if(rflen > 1 &&(*rfData)>=RF24_1MBPS && (*rfData)<= RF24_250KBPS)
+	{
+		if(theConfig.GetRFDataRate() != (*rfData))
+		{
+		  theConfig.SetRFDataRate(*rfData);
+		}
+	}
+	rfData++;
+	if(rflen > 2 &&(*rfData)>=RF24_PA_MIN && (*rfData)<= RF24_PA_ERROR)
+	{
+
+		if(theConfig.GetRFPowerLevel() != (*rfData))
+		{
+			theConfig.SetRFPowerLevel(*rfData);
+		}
+	}
+	/*if(rflen > 8)
+	{
+		uint64_t networkid = *(uint64_t*)rfData;
+		LOGW(LOGTAG_DATA, "networkid=%llu",networkid);
+		if(networkid != theRadio.getCurrentNetworkID())
+		{
+			theRadio.setAddress(0,networkid);
+		}
+	}*/
+	// Apply new settings
+	/*
+	if( theSys.CheckRF() ) {
+		switch2BaseNetwork();
+		delay(10);
+		switch2MyNetwork();
+		LOGN(LOGTAG_MSG, "RF24 config changed.");
+	}
+	*/
 }

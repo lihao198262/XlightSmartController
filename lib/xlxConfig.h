@@ -28,6 +28,8 @@
 
 // Maximum items in Hardware Key Map
 #define MAX_KEY_MAP_ITEMS           4
+#define MAX_NUM_BUTTONS             4
+#define MAX_BTN_OP_TYPE             2
 
 //------------------------------------------------------------------
 // Xlight Configuration Data Structures
@@ -46,6 +48,12 @@ typedef struct
 } HardKeyMap_t;
 
 typedef struct
+{
+  UC action;                                // Type of action
+  UC keyMap;                                // Button Key Map: 8 bits for each button, one bit corresponds to one relay key
+} Button_Action_t;
+
+typedef struct
 #ifdef PACK
 	__attribute__((packed))
 #endif
@@ -61,6 +69,50 @@ typedef struct
   UC L3                       :8;           // Length of thread 3
 } Hue_t;
 
+#if VERSION_CONFIG_DATA > 24
+typedef struct
+{
+  // Static & status parameters
+  UC version                  :8;           // Data version, other than 0xFF
+  UC indBrightness            :8;           // Indicator of brightness
+  UC relay_key_value;
+  char Organization[20];                    // Organization name
+  char ProductName[20];                     // Product name
+
+  // Configurable parameters
+  UC mainDevID;                             // NodeID for main device
+  UC subDevID;                              // SubID for main device
+  UC typeMainDevice           :8;           // Type of the main lamp
+  UC rfChannel;                             // RF Channel: [0..127]
+  UC rfPowerLevel             :2;           // RF Power Level 0..3
+  UC rfDataRate               :2;           // RF Data Rate [0..2], 0 for 1Mbps, or 1 for 2Mbps, 2 for 250kbs
+  BOOL enableCloudSerialCmd   :1;           // Whether enable cloud serial command
+  BOOL enableDailyTimeSync    :1;           // Whether enable daily time synchronization
+  BOOL enableSpeaker          :1;           // Whether enable speaker
+  BOOL fixedNID               :1;           // Whether fixed Node ID
+  UC bcMsgRtpTimes            :4;           // Broadcast message repeat times
+  UC ndMsgRtpTimes            :4;           // Node message repeat times
+  BOOL stWiFi                 :1;           // Wi-Fi status: On / Off
+  BOOL enHWSwitch             :1;           // Whether use Hardware Switch as default
+  UC hwsObj                   :3;           // Hardware Switch Object
+  UC useCloud                 :2;           // How to depend on the Cloud
+  BOOL Reserved_bool          :1;           // Reserved for boolean flags
+  US sensorBitmap             :16;          // Sensor enable bitmap
+  UC numDevices               :8;           // Number of devices
+  UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
+  Timezone_t timeZone;                      // Time zone
+  US maxBaseNetworkDuration;
+  UC tmLoopKC;                              // Loop Keycode timeout
+  UC Reserved_UC1[2];
+  char bleName[24];
+  char blePin[6];
+  char pptAccessCode[8];
+  UC asrSNT[MAX_ASR_SNT_ITEMS];
+  HardKeyMap_t keyMap[MAX_KEY_MAP_ITEMS];
+  Button_Action_t btnAction[MAX_NUM_BUTTONS][MAX_BTN_OP_TYPE];  // 0: press, 1: long press
+} Config_t;
+
+#else
 typedef struct
 {
   UC version                  :8;           // Data version, other than 0xFF
@@ -73,7 +125,8 @@ typedef struct
   UC bcMsgRtpTimes            :4;           // Broadcast message repeat times
   UC ndMsgRtpTimes            :4;           // Node message repeat times
   UC tmLoopKC;                              // Loop Keycode timeout
-  UC Reserved_UC1[2];
+  UC rfChannel;                             // RF Channel: [0..127]
+  UC Reserved_UC1;
   char ProductName[20];                     // Product name
   UC subDevID;                              // SubID for main device
   UC relay_key_value;
@@ -83,7 +136,8 @@ typedef struct
   BOOL enableDailyTimeSync    :1;           // Whether enable daily time synchronization
   BOOL enableSpeaker          :1;           // Whether enable speaker
   BOOL fixedNID               :1;           // Whether fixed Node ID
-  BOOL Reserved_bool          :4;           // Reserved for boolean flags
+  UC rfDataRate               :2;           // RF Data Rate [0..2], 0 for 1Mbps, or 1 for 2Mbps, 2 for 250kbs
+  BOOL Reserved_bool          :2;           // Reserved for boolean flags
   UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
   UC rfPowerLevel             :2;           // RF Power Level 0..3
   BOOL stWiFi                 :1;           // Wi-Fi status: On / Off
@@ -98,7 +152,10 @@ typedef struct
   char pptAccessCode[8];
   UC asrSNT[MAX_ASR_SNT_ITEMS];
   HardKeyMap_t keyMap[MAX_KEY_MAP_ITEMS];
+  Button_Action_t btnAction[MAX_NUM_BUTTONS][MAX_BTN_OP_TYPE];  // 0: press, 1: long press
 } Config_t;
+
+#endif
 
 //------------------------------------------------------------------
 // Xlight Device Status Table Structures
@@ -160,35 +217,44 @@ typedef struct
 //------------------------------------------------------------------
 // Xlight NodeID List
 //------------------------------------------------------------------
-#define LEN_NODE_IDENTITY     6
-typedef struct    // Exact 12 bytes
+#define LEN_NODE_IDENTITY     8
+typedef struct    // Exact 16 bytes
 	__attribute__((packed))
 {
 	UC nid;
 	UC device;       // Associated device (node id)
   UC identity[LEN_NODE_IDENTITY];
   UL recentActive;
+  UC sid;         // SubID
+  UC cfgPos;      // Config storage position
 } NodeIdRow_t;
 
-inline BOOL isIdentityEmpty(UC *pId)
-{ return(!(pId[0] | pId[1] | pId[2] | pId[3] | pId[4] | pId[5])); };
+inline BOOL isIdentityEmpty(UC *pId, UC nLen = LEN_NODE_IDENTITY)
+{
+  for( int i = 0; i < nLen; i++ ) { if(pId[i] > 0) return FALSE; }
+  return TRUE;
+};
 
 inline void copyIdentity(UC *pId, uint64_t *pData)
-{ memcpy(pId, pData, LEN_NODE_IDENTITY); };
-
-inline void resetIdentity(UC *pId)
-{ memset(pId, 0x00, LEN_NODE_IDENTITY); };
-
-inline BOOL isIdentityEqual(UC *pId1, UC *pId2)
 {
-  for( int i = 0; i < LEN_NODE_IDENTITY; i++ ) { if(pId1[i] != pId2[i]) return false; }
+  UC nLen = min(LEN_NODE_IDENTITY, sizeof(uint64_t));
+  memcpy(pId, pData, nLen);
+};
+
+inline void resetIdentity(UC *pId, UC nLen = LEN_NODE_IDENTITY)
+{ memset(pId, 0x00, nLen); };
+
+inline BOOL isIdentityEqual(UC *pId1, UC *pId2, UC nLen = LEN_NODE_IDENTITY)
+{
+  for( int i = 0; i < nLen; i++ ) { if(pId1[i] != pId2[i]) return false; }
   return true;
 };
 
 inline BOOL isIdentityEqual(UC *pId1, uint64_t *pData)
 {
+  UC nLen = min(LEN_NODE_IDENTITY, sizeof(uint64_t));
   UC pId2[LEN_NODE_IDENTITY]; copyIdentity(pId2, pData);
-  return isIdentityEqual(pId1, pId2);
+  return isIdentityEqual(pId1, pId2, nLen);
 };
 
 //------------------------------------------------------------------
@@ -249,11 +315,36 @@ typedef struct
   UC sw                   : 2; // Main Switch: Switch value for set power command
 	Hue_t ring[MAX_RING_NUM];
 	UC filter		            : 4;
-  UC reserverd            : 4;
+  UC reserved             : 4;
 } ScenarioRow_t;
 
 #define SNT_ROW_SIZE	sizeof(ScenarioRow_t)
 #define MAX_SNT_ROWS	64
+
+//------------------------------------------------------------------
+// Xlight Node Config Table Structures
+//------------------------------------------------------------------
+typedef struct
+{
+  OP_FLAG op_flag			    : 2;
+  FLASH_FLAG flash_flag		: 1;
+  RUN_FLAG run_flag			  : 1;
+	UC uid			            : 8;
+  UL cid;                 // Config ID
+  UC type			            : 8;
+  UC len			            : 8;
+  UC reserved[8];
+} NodeConfig_head_t;
+
+typedef struct
+{
+  NodeConfig_head_t header;
+  UC data[240];
+} NodeConfig_t;
+
+#define NCT_HEAD_SIZE	    sizeof(NodeConfig_head_t)
+#define NCT_ROW_SIZE	    sizeof(NodeConfig_t)
+#define MAX_NCT_ROWS	    (int)(MEM_NODECONFIG_LEN / NCT_ROW_SIZE)
 
 // Node List Class
 class NodeListClass : public OrderdList<NodeIdRow_t>
@@ -367,8 +458,10 @@ public:
   String GetProductName();
   void SetProductName(const char *strName);
 
+#if VERSION_CONFIG_DATA <= 24
   String GetToken();
   void SetToken(const char *strName);
+#endif
 
   String GetBLEName();
   void SetBLEName(const char *strName);
@@ -436,6 +529,12 @@ public:
   UC GetTimeLoopKC();
   BOOL SetTimeLoopKC(UC _value);
 
+  UC GetRFChannel();
+  BOOL SetRFChannel(UC channel);
+
+  UC GetRFDataRate();
+  BOOL SetRFDataRate(UC dataRate);
+
   UC GetRFPowerLevel();
   BOOL SetRFPowerLevel(UC level);
 
@@ -460,6 +559,10 @@ public:
   BOOL IsKeyMapItemAvalaible(const UC _code);
   bool IsKeyMatchedItem(const UC _code, const UC _nid, const UC _subID = 0);
   void showKeyMap();
+
+  BOOL SetExtBtnAction(const UC _btn, const UC _opt, const UC _act, const UC _keymap);
+  BOOL ExecuteBtnAction(const UC _btn, const UC _opt);
+  void showButtonActions();
 
   NodeListClass lstNodes;
   RemoteStatus_t m_stMainRemote;
