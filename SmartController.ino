@@ -84,18 +84,20 @@ void SysteTimerCB()
 		// Timeout interuption of Cloud connecting
 //#ifndef SYS_SERIAL_DEBUG
 		//if( WiFi.listening() ) {
-			if (++slowTick > RTE_TICK_SLOWPROCESS) {
+			/*if (++slowTick > RTE_TICK_SLOWPROCESS) {
 				slowTick = 0;
 				//SERIAL_LN("Wi-Fi in listening mode...");
 				// Get Wi-Fi credential from BLE
-				theSys.ProcessLocalCommands();
-				/*if( WiFi.hasCredentials() ) {
+				//SERIAL_LN("ProcessLocalCommands ...");
+				//theSys.ProcessLocalCommands();
+				//SERIAL_LN("ProcessLocalCommands end");
+				if( WiFi.hasCredentials() ) {
 					//WiFi.listen(false);
 					//theSys.ResetSerialPort();
 					SERIAL_LN("will connect Wi-Fi in system thread");
 					//theSys.connectWiFi();
-				}*/
-			}
+				}
+			}*/
 			// Reset?
 		//}
 //#endif
@@ -105,7 +107,7 @@ void SysteTimerCB()
 // Set "manual" mode
 SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
-
+//
 void setup()
 {
 	WiFi.on();
@@ -225,13 +227,13 @@ void loop()
 
   // Self-test & alarm trigger, also insert delay between each loop
   IF_MAINLOOP_TIMER( theSys.SelfCheck(RTE_DELAY_SELFCHECK), "SelfCheck" );
-
-	if( !theConfig.GetDisableWiFi() ) {
+	//if( !theConfig.GetDisableWiFi() ) {
 		// Process Could Messages
-	  if( Particle.connected() == true ) {
+	  //if( Particle.connected() == true ) {
 	    IF_MAINLOOP_TIMER( Particle.process(), "ProcessCloud" );
-	  }
-	}
+	  //}
+	//}
+	//wd.checkin();
 }
 
 #endif

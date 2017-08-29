@@ -632,13 +632,19 @@ BOOL SmartControllerClass::IsWANGood()
 // Process Local bridge commands
 void SmartControllerClass::ProcessLocalCommands() {
 	// Check RF Message
+	//SERIAL_LN("PeekMessage...");
 	theRadio.PeekMessage();
+	//SERIAL_LN("PeekMessage end");
 
 	// Process RF2.4 messages
+	//SERIAL_LN("ProcessMQ...");
 	theRadio.ProcessMQ();
+	//SERIAL_LN("ProcessMQ end");
 
 	// Process Console Command
-    theConsole.processCommand();
+	//SERIAL_LN("processCommand...");
+  theConsole.processCommand();
+  //SERIAL_LN("processCommand end");
 
 #ifndef DISABLE_BLE
 	// Process BLE commands
@@ -650,7 +656,7 @@ void SmartControllerClass::ProcessLocalCommands() {
 void SmartControllerClass::ProcessCommands()
 {
 	// Process Local Bridge Commands
-	//ProcessLocalCommands();
+	ProcessLocalCommands();
 
 #ifndef DISABLE_ASR
 	// Process ASR Command
