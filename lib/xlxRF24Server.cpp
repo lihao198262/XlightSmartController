@@ -331,34 +331,41 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg, const UC _r
 
 	// Get NodeId & subID
 	lv_nSubID = _sensor;
-	nPos = strMsg.indexOf('-');
-	if (nPos > 0) {
-		// May contain subID
-		lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
-		nPos2 = strMsg.indexOf(':', nPos + 1);
-		if (nPos2 > 0) {
-			lv_nSubID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
-			nPos = nPos2;
-		}
-	} else {
-		// Has no subID
-		nPos = strMsg.indexOf(':');
+	// send <message> or <NodeID:MessageId[:Payload]>
+	// check whether is <message> or <NodeID:MessageId[:Payload]>
+	if(strMsg.indexOf(':') > 0)
+	{
+		//LOGD(LOGTAG_MSG, "nomar msg: %s", strMsg);
+		nPos = strMsg.indexOf('-');
 		if (nPos > 0) {
+			// May contain subID
 			lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
+			nPos2 = strMsg.indexOf(':', nPos + 1);
+			if (nPos2 > 0) {
+				lv_nSubID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
+				nPos = nPos2;
+			}
+		} else {
+			// Has no subID
+			nPos = strMsg.indexOf(':');
+			if (nPos > 0) {
+				lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
+			}
 		}
-	}
-
-	if (nPos > 0) {
-		// Extract MessageID
-		lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1).toInt());
-		nPos2 = strMsg.indexOf(':', nPos + 1);
-		if (nPos2 > 0) {
-			lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
-			lv_sPayload = strMsg.substring(nPos2 + 1);
+		if(nPos > 0)
+		{
+			// Extract MessageID
+			lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1).toInt());
+			nPos2 = strMsg.indexOf(':', nPos + 1);
+			if (nPos2 > 0) {
+				lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
+				lv_sPayload = strMsg.substring(nPos2 + 1);
+			}
 		}
 	}
 	else {
 		// Parse serial message
+    //LOGD(LOGTAG_MSG, "serial msg: %s", strMsg);
 		lv_nMsgID = 0;
 		lv_sPayload = strMsg;
 	}

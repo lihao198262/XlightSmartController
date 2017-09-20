@@ -588,6 +588,7 @@ bool SerialConsoleClass::doShow(const char *cmd)
   		SERIAL_LN("m_isBLE = \t\t\t%d", theSys.IsBLEGood());
   		SERIAL_LN("m_isLAN = \t\t\t%d", theSys.IsLANGood());
   		SERIAL_LN("m_isWAN = \t\t\t%d", theSys.IsWANGood());
+		SERIAL_LN("lamp Chip: \t\t\t%s", theConfig.GetDisableLamp() ? "disabled" : "enabled");
       SERIAL_LN("");
       SERIAL_LN("fixedNodeID = \t\t\t%d", theConfig.IsFixedNID());
       SERIAL_LN("enableCloudSerialCmd = \t\t%d", theConfig.IsCloudSerialEnabled());
@@ -875,6 +876,11 @@ bool SerialConsoleClass::doSet(const char *cmd)
           } else if (wal_strnicmp(sParam1, "wifi", 4) == 0) {
             theConfig.SetDisableWiFi(atoi(sParam2) == 0);
             retVal = true;
+          }
+		  else if (wal_strnicmp(sParam1, "lamp", 4) == 0) {
+			  theConfig.SetDisableLamp(atoi(sParam2) == 0);
+			  CloudOutput("lamp:%d", theConfig.GetDisableLamp());
+			  retVal = true;
           }
         } else {
           SERIAL_LN("Require flag value, use '? set flag' for detail\n\r");

@@ -378,6 +378,7 @@ void ConfigClass::InitConfig()
 	m_config.rfDataRate = RF24_DATARATE;
 	m_config.maxBaseNetworkDuration = MAX_BASE_NETWORK_DUR;
 	m_config.disableWiFi = 0;
+	m_config.disableLamp = 1;
 	m_config.useCloud = CLOUD_ENABLE;
 	m_config.stWiFi = 1;
 	m_config.bcMsgRtpTimes = 3;
@@ -1037,6 +1038,22 @@ BOOL ConfigClass::SetDisableWiFi(BOOL _st)
   return false;
 }
 
+BOOL ConfigClass::GetDisableLamp()
+{
+	return m_config.disableLamp;
+}
+
+BOOL ConfigClass::SetDisableLamp(BOOL _st)
+{
+	if( _st != m_config.disableLamp ) {
+		m_config.disableLamp = _st;
+		m_isChanged = true;
+		SERIAL_LN("Lamp chip %s", _st ? "disabled" : "enabled");
+		return true;
+	}
+	return false;
+}
+
 UC ConfigClass::GetUseCloud()
 {
 	return m_config.useCloud;
@@ -1326,6 +1343,18 @@ void ConfigClass::showKeyMap()
 	}
 }
 
+UC ConfigClass::GetKeyOnNum()
+{
+	UC num = 0;
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		if( m_config.keyMap[_code].nid > 0 ) {
+			if(theSys.relay_get_key(_code + 1))
+				num++;
+		}
+	}
+	return num;
+}
+
 BOOL ConfigClass::SetExtBtnAction(const UC _btn, const UC _opt, const UC _act, const UC _keymap)
 {
 	if( _btn < MAX_NUM_BUTTONS && _opt < MAX_BTN_OP_TYPE ) {
@@ -1351,8 +1380,17 @@ BOOL ConfigClass::ExecuteBtnAction(const UC _btn, const UC _opt)
 				if( BITTEST(m_config.btnAction[_btn][_opt].keyMap, idx) ) {
 					_key = idx + 1;
 					_st = (m_config.btnAction[_btn][_opt].action == DEVICE_SW_TOGGLE ? !(theSys.relay_get_key(_key)) : m_config.btnAction[_btn][_opt].action == DEVICE_SW_ON);
-					//SERIAL_LN("test: btn:%d opt:%d set key:%d to %d", _btn, _opt, _key, _st);
-					theSys.relay_set_key(_key, _st);
+					//SERIAL_LN("test: btn:%d opt:%d set key:%d to %d", _btn, _opt, _key, _st);				
+					if(theConfig.GetDisableLamp())
+					{
+						theSys.relay_set_key(_key, _st);
+						thePanel.SetRingOnOff(_st);
+					}
+					else
+					{
+						theSys.relay_set_key(_key, _st);
+					}
+					
 				}
 			}
 			return true;

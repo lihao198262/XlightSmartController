@@ -220,6 +220,7 @@ void SmartControllerClass::InitPins()
 #ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 	pinMode(PIN_SOFT_KEY_1, OUTPUT);
+	pinSetFast(PIN_SOFT_KEY_1);
 #endif
 #ifdef PIN_SOFT_KEY_4
 	pinMode(PIN_SOFT_KEY_4, OUTPUT);
@@ -865,6 +866,7 @@ bool SmartControllerClass::MakeSureHardSwitchOn(UC dev, const UC subID)
 			}
 		}
 	}
+	if(theConfig.GetDisableLamp()) thePanel.SetRingOnOff(true);
 	return true;
 }
 
@@ -941,7 +943,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 {
   bool rc = FALSE;
 	UC keyID = 0;
-
+  //LOGD(LOGTAG_MSG, "relay set key=%d,onoff=%d",_key,_on);
   if( _key >= '1' && _key <= '8' ) keyID = _key - '0';
 	else if( _key >= 1 && _key <= 8 ) keyID = _key;
 
@@ -949,7 +951,8 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 #ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 		// Trigger Relay PIN
-		digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
+		// digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
+		digitalWrite(PIN_SOFT_KEY_1, _on ? LOW : HIGH);
 		// Update bitmap
 		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;
@@ -2741,6 +2744,7 @@ BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID, const UC subID)
 	if (DevStatusRowPtr) {
 		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? true : !DevStatusRowPtr->data.ring[0].State);
 	} else {
+		//LOGD(LOGTAG_MSG, "ring=%d",thePanel.GetRingOnOff());
 		_st = thePanel.GetRingOnOff() ? DEVICE_SW_OFF : DEVICE_SW_ON;
 	}
 
@@ -2756,7 +2760,6 @@ BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID, const UC subID)
 BOOL SmartControllerClass::ChangeLampBrightness(UC _nodeID, UC _percentage, const UC subID)
 {
 	MakeSureHardSwitchOn(_nodeID, subID);
-
 	BOOL rc = false;
 	//ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	//if (!DevStatusRowPtr) {

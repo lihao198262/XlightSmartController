@@ -150,7 +150,7 @@ bool xlPanelClass::ProcessEncoder()
         CheckHeldTimeout(m_pEncoder->getHeldDuration());
         break;
       case BUTTON_CLICKED:
-        LOGD(LOGTAG_ACTION, "Button Clicked");
+        LOGD(LOGTAG_ACTION, "Button Clicked,keyobj=%d",theConfig.GetRelayKeyObj());
         if( theConfig.GetRelayKeyObj() == BTN_OBJ_SCAN_KEY_MAP ) {
           theSys.ToggleAllHardSwitchs();
         } else if( theConfig.GetRelayKeyObj() == BTN_OBJ_LOOP_KEY_MAP ) {
@@ -234,8 +234,9 @@ uint8_t xlPanelClass::GetButtonStatus()
 // Change LED ring
 bool xlPanelClass::SetHC595()
 {
+  //SERIAL_LN("SetHC595 ... ");
   if( !m_pHC595 ) return false;
-
+  if(theConfig.GetDisableLamp()) return false;
   uint8_t pos;
   if( GetCCTFlag() ) {
     // Change dimmer value to LED ring position
@@ -274,6 +275,10 @@ void xlPanelClass::SetRingOnOff(bool _switch)
     pos = (_switch ? map(m_nDimmerValue, 0, 100, 0, PANEL_NUM_LEDS_RING) : 0);
   }
   m_stSwitch = _switch;
+  if(theConfig.GetDisableLamp())
+  {
+    pos = theConfig.GetKeyOnNum()*12/MAX_KEY_MAP_ITEMS;
+  }
   SetRingPos(pos);
 }
 

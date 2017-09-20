@@ -32,7 +32,8 @@ bool MyParserSerial::parse(MyMessage &message, char *inputString) {
 	int i = 0;
 	uint8_t command = 0;
 	uint8_t ack = 0;
-
+	String sNodeid = "";
+	int nPos = 0;
 	message.setSender( GATEWAY_ADDRESS );
 	message.setLast( GATEWAY_ADDRESS );
 	message.setSensor(0);
@@ -40,23 +41,37 @@ bool MyParserSerial::parse(MyMessage &message, char *inputString) {
 	// Extract command data coming on serial line
 	/// Contains subID?
 	bool _hasSubID = false;
-	str = strtok_r(inputString, "-", &p);
+	/*str = strtok_r(inputString, "-", &p);
 	if( str ) {
 		_hasSubID = true;
 		message.setDestination((uint8_t)atoi(str));
-		str = strtok_r(NULL, ";", &p);
+		str = strtok_r(NULL, "-", &p);
 		if( str ) {
 			message.setSensor((uint8_t)atoi(str));
 		}
-	}
-
+	}*/
 	for (str = strtok_r(inputString, ";", &p); // split using semicolon
 		str && i < 6; // loop while str is not null an max 5 times
 		str = strtok_r(NULL, ";", &p) // get subsequent tokens
 			) {
 		switch (i) {
 			case 0: // Radioid (destination)
-				if( !_hasSubID ) message.setDestination((uint8_t)atoi(str));
+			  sNodeid = str;
+				nPos = sNodeid.indexOf('-');
+				if (nPos > 0) {
+					// contain subID
+					_hasSubID = true;
+					/*SERIAL("nodeid ");
+					Serial.println((uint8_t)(sNodeid.substring(0, nPos).toInt()));
+					SERIAL("subid ");
+					Serial.println((uint8_t)(sNodeid.substring(nPos + 1).toInt()));*/
+					message.setDestination((uint8_t)(sNodeid.substring(0, nPos).toInt()));
+					message.setSensor((uint8_t)(sNodeid.substring(nPos + 1).toInt()));
+				}
+				if( !_hasSubID )
+				{
+					message.setDestination((uint8_t)atoi(str));
+				}
 				break;
 			case 1: // Sender
 				message.setSender((uint8_t)atoi(str));

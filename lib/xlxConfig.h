@@ -103,7 +103,9 @@ typedef struct
   Timezone_t timeZone;                      // Time zone
   US maxBaseNetworkDuration;
   UC tmLoopKC;                              // Loop Keycode timeout
-  UC Reserved_UC1[2];
+  BOOL disableLamp            :1;           // if disable lamp
+  UC reserved                 :7;           // reserved
+  UC Reserved_UC1[1];
   char bleName[24];
   char blePin[6];
   char pptAccessCode[8];
@@ -517,6 +519,8 @@ public:
 
   BOOL GetDisableWiFi();
   BOOL SetDisableWiFi(BOOL _st);
+  BOOL GetDisableLamp();
+  BOOL SetDisableLamp(BOOL _st);
 
   UC GetUseCloud();
   BOOL SetUseCloud(UC opt);
@@ -563,6 +567,7 @@ public:
   BOOL IsKeyMapItemAvalaible(const UC _code);
   bool IsKeyMatchedItem(const UC _code, const UC _nid, const UC _subID = 0);
   void showKeyMap();
+  UC GetKeyOnNum();
 
   BOOL SetExtBtnAction(const UC _btn, const UC _opt, const UC _act, const UC _keymap);
   BOOL ExecuteBtnAction(const UC _btn, const UC _opt);
