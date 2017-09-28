@@ -220,7 +220,7 @@ void SmartControllerClass::InitPins()
 #ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 	pinMode(PIN_SOFT_KEY_1, OUTPUT);
-	pinSetFast(PIN_SOFT_KEY_1);
+	//pinSetFast(PIN_SOFT_KEY_1);
 #endif
 #ifdef PIN_SOFT_KEY_4
 	pinMode(PIN_SOFT_KEY_4, OUTPUT);
@@ -951,8 +951,8 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 #ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 		// Trigger Relay PIN
-		// digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
-		digitalWrite(PIN_SOFT_KEY_1, _on ? LOW : HIGH);
+		digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
+		//digitalWrite(PIN_SOFT_KEY_1, _on ? LOW : HIGH);
 		// Update bitmap
 		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;

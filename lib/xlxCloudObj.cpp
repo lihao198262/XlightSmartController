@@ -418,11 +418,16 @@ BOOL CloudObjClass::PublishAlarm(const char *msg)
 /// 0 - string is intact, can be executed
 /// 1 - waiting for more input
 /// -1 - error
-int CloudObjClass::ProcessJSONString(String inStr)
+int CloudObjClass::ProcessJSONString(const String& inStr)
 {
   String strTemp = inStr;
   StaticJsonBuffer<COMMAND_JSON_SIZE * 8> lv_jBuf;
-  m_jpCldCmd = &(lv_jBuf.parseObject(const_cast<char*>(strTemp.c_str())));
+  m_jpCldCmd = &(lv_jBuf.parseObject(const_cast<char*>(inStr.c_str())));
+  /*char* tst = const_cast<char*>(inStr.c_str());
+  SERIAL("ptr addr = %p",tst);
+  //SERIAL(tst);
+  SERIAL(" ,index = ");
+  Serial.println(inStr.indexOf("cmd"));*/
   if (!m_jpCldCmd->success())
   {
 		if( m_strCldCmd.length() > 0 ) {

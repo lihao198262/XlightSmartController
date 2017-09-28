@@ -115,7 +115,7 @@ public:
   virtual int CldPowerSwitch(String swStr) = 0;
   virtual int CldSetCurrentTime(String tmStr) = 0;
   virtual void OnSensorDataChanged(const UC _sr, const UC _nd) = 0;
-  int ProcessJSONString(String inStr);
+  int ProcessJSONString(const String& inStr);
 
   BOOL UpdateDHT(uint8_t nid, float _temp, float _humi);
   BOOL UpdateBrightness(uint8_t nid, uint8_t value);
