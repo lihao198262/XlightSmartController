@@ -441,36 +441,54 @@ BOOL ConfigClass::MemReadScenarioRow(ScenarioRow_t &row, uint32_t address)
 #endif
 }
 
+BOOL ConfigClass::IsValidConfig()
+{
+	if( m_config.version == 0xFF
+			|| m_config.timeZone.id == 0
+			|| m_config.timeZone.id > 500
+			|| m_config.timeZone.dst > 1
+			|| m_config.timeZone.offset < -780
+			|| m_config.timeZone.offset > 780
+			|| m_config.numDevices > MAX_DEVICE_PER_CONTROLLER
+			|| m_config.numNodes < 2
+			|| m_config.numNodes > MAX_NODE_PER_CONTROLLER
+			|| m_config.typeMainDevice == devtypUnknown
+			|| m_config.typeMainDevice >= devtypDummy
+			|| m_config.rfPowerLevel > RF24_PA_MAX
+		 	|| m_config.useCloud > CLOUD_MUST_CONNECT
+		 	|| (IS_NOT_DEVICE_NODEID(m_config.mainDevID) && m_config.mainDevID != NODEID_DUMMY) )
+    {
+		return false;
+	}
+	return true;
+}
+
 BOOL ConfigClass::LoadConfig()
 {
   // Load System Configuration
   if( sizeof(Config_t) <= MEM_CONFIG_LEN )
   {
     EEPROM.get(MEM_CONFIG_OFFSET, m_config);
-    if( m_config.version == 0xFF
-      || m_config.timeZone.id == 0
-      || m_config.timeZone.id > 500
-      || m_config.timeZone.dst > 1
-      || m_config.timeZone.offset < -780
-      || m_config.timeZone.offset > 780
-      || m_config.numDevices > MAX_DEVICE_PER_CONTROLLER
-			|| m_config.numNodes < 2
-			|| m_config.numNodes > MAX_NODE_PER_CONTROLLER
-      || m_config.typeMainDevice == devtypUnknown
-      || m_config.typeMainDevice >= devtypDummy
-			|| m_config.rfPowerLevel > RF24_PA_MAX
-		 	|| m_config.useCloud > CLOUD_MUST_CONNECT
-		 	|| (IS_NOT_DEVICE_NODEID(m_config.mainDevID) && m_config.mainDevID != NODEID_DUMMY) )
-    {
-      InitConfig();
-      m_isChanged = true;
-      LOGW(LOGTAG_MSG, "Sysconfig is empty, use default settings.");
-      SaveConfig();
+    if(!IsValidConfig())
+    {	
+	  LOGW(LOGTAG_MSG, "Sysconfig is empty, use default settings.");
+	  LoadBackupConfig();
+	  if(!IsValidConfig())
+	  {
+        InitConfig();
+        m_isChanged = true;
+        LOGW(LOGTAG_MSG, "Sys backconfig is empty, use default settings.");
+        SaveConfig();
+	  }
+	  else
+      {
+		LOGW(LOGTAG_MSG, "Sys backconfig loaded.");
+      }
     }
     else
     {
 			m_config.version = VERSION_CONFIG_DATA;
-      LOGI(LOGTAG_MSG, "Sysconfig loaded.");
+      LOGW(LOGTAG_MSG, "Sysconfig loaded.");
     }
     m_isLoaded = true;
     m_isChanged = false;
@@ -504,6 +522,12 @@ BOOL ConfigClass::SaveConfig()
     EEPROM.put(MEM_CONFIG_OFFSET, m_config);
     m_isChanged = false;
     LOGI(LOGTAG_MSG, "Sysconfig saved.");
+	uint8_t attemps = 0;
+	while(++attemps <=3 )
+    {
+		if(SaveBackupConfig())
+			break;
+    }
   }
 
 	// Save Device Status
@@ -1465,6 +1489,24 @@ BOOL ConfigClass::LoadDeviceStatus()
 	}
 
 	return true;
+}
+
+BOOL ConfigClass::LoadBackupConfig()
+{
+#ifdef MCU_TYPE_P1
+	return P1Flash->read<Config_t>(m_config, MEM_CONFIG_BACKUP_OFFSET);
+#else
+	return false;
+#endif
+}
+
+BOOL ConfigClass::SaveBackupConfig()
+{
+#ifdef MCU_TYPE_P1
+	return P1Flash->write<Config_t>(m_config, MEM_CONFIG_BACKUP_OFFSET);
+#else
+	return false;
+#endif
 }
 
 // Save Device Status

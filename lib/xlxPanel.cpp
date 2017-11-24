@@ -267,6 +267,7 @@ bool xlPanelClass::GetRingOnOff()
 
 void xlPanelClass::SetRingOnOff(bool _switch)
 {
+  //LOGD(LOGTAG_EVENT, "SetRingOnOff to %d", _switch);
   if( !m_pHC595 ) return;
   uint8_t pos;
   if( GetCCTFlag() ) {

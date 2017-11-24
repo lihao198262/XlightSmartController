@@ -24,6 +24,7 @@ void RF24::csn(bool mode)
   // Was 4Mhz on Arduino
   SPI.setClockDivider(SPI_CLOCK_DIV16); // 4.5Mhz (if using <= 2mbps data rate)
   //SPI.setClockDivider(SPI_CLOCK_DIV32); // 2.25Mhz (if using <= 1mbps data rate)
+  //SPI.setClockSpeed(500, KHZ);
 
   digitalWrite(csn_pin,mode);
 	delayMicroseconds(5);

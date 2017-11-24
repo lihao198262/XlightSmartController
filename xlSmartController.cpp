@@ -310,7 +310,7 @@ BOOL SmartControllerClass::Start()
 
 	FindCurrentDevice();
 
-	LOGI(LOGTAG_MSG, "SmartController started.");
+	LOGN(LOGTAG_MSG, "SmartController started.");
 	LOGI(LOGTAG_MSG, "Product Info: %s-%s-%d",
 			theConfig.GetOrganization().c_str(), theConfig.GetProductName().c_str(), theConfig.GetVersion());
 	LOGI(LOGTAG_MSG, "System Info: %s-%s",
@@ -2625,8 +2625,10 @@ UC SmartControllerClass::GetDevOnOff(UC _nodeID)
  	}
 	if (DevStatusRowPtr) {
 		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? DEVICE_SW_OFF : DevStatusRowPtr->data.ring[0].State);
+		//LOGW(LOGTAG_MSG, "Find dev node:%d success,st:%d", _nodeID,_st);
 	} else {
 		_st = thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF;
+		//LOGW(LOGTAG_MSG, "Find dev node:%d fail,st:%d", _nodeID,_st);
 	}
 	return _st;
 }
@@ -2892,13 +2894,16 @@ BOOL SmartControllerClass::ConfirmLampOnOff(UC _nodeID, UC _st)
 
 BOOL SmartControllerClass::ConfirmLampBrightness(UC _nodeID, UC _st, UC _percentage, UC _ringID)
 {
+	//LOGW(LOGTAG_MSG, "ConfirmLampBrightness node:%d st:%d,br:%d", _nodeID, _st,_percentage);
 	BOOL rc = false;
 	UC r_index = (_ringID == RING_ID_ALL ? 0 : _ringID - 1);
 	//m_pMainDev->data.ring[0].BR = _percentage;
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
+		//LOGW(LOGTAG_MSG, "find node ptr", _nodeID, _st,_percentage);
 		ConfirmLampPresent(DevStatusRowPtr, true);
 		if( DevStatusRowPtr->data.ring[r_index].State != _st || DevStatusRowPtr->data.ring[r_index].BR != _percentage ) {
+			//LOGW(LOGTAG_MSG, "set node:%d st:%d,br:%d", _nodeID, _st,_percentage);
 			DevStatusRowPtr->data.present = 1;
 			DevStatusRowPtr->data.ring[r_index].State = _st;
 			DevStatusRowPtr->data.ring[r_index].BR = _percentage;

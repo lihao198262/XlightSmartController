@@ -411,6 +411,10 @@ public:
   BOOL LoadConfig();
   BOOL SaveConfig();
   BOOL IsConfigLoaded();
+  
+  BOOL IsValidConfig();
+  BOOL LoadBackupConfig();
+  BOOL SaveBackupConfig();
 
   BOOL LoadDeviceStatus();
   BOOL SaveDeviceStatus();

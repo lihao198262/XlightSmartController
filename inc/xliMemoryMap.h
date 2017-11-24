@@ -69,6 +69,9 @@
 #define MEM_NODECONFIG_OFFSET     MEM_MISC_OFFSET
 #define MEM_NODECONFIG_LEN        0x004000
 
+#define MEM_CONFIG_BACKUP_OFFSET  (MEM_NODECONFIG_OFFSET + MEM_NODECONFIG_LEN)
+#define MEM_CONFIG_BACKUP_LEN     0x0100
+
 //-------------------------------
 
 #endif /* xliMemoryMap_h */
