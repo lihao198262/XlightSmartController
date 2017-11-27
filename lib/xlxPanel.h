@@ -15,6 +15,7 @@ private:
   bool m_stSwitch;
   bool m_bCCTFlag;
   uint32_t m_nCCTick;
+  uint32_t m_nLastOpPast;
 
 protected:
   bool SetHC595();

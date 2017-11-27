@@ -398,7 +398,10 @@ bool RF24ServerClass::ProcessSend(MyMessage *pMsg)
 	}
 
 	// Add message to sending MQ. Right now tag has no actual purpose (just for debug)
-	if( AddMessage((UC *)&(pMsg->msg), MAX_MESSAGE_LENGTH, GetMQLength()) > 0 ) {
+	uint32_t flag = 0;
+	flag = ((uint32_t)pMsg->getSensor()<<24) | ((uint32_t)pMsg->getCommand()<<16) | ((uint32_t)pMsg->getType()<<8) | (pMsg->getDestination());
+	LOGW(LOGTAG_MSG, "flag=%d,d=%d,cmd=%d,type=%d,sensor=%d",flag,pMsg->getDestination(),pMsg->getCommand(),pMsg->getType(),pMsg->getSensor());
+	if( AddMessage((UC *)&(pMsg->msg), MAX_MESSAGE_LENGTH, GetMQLength(), flag) > 0 ) {
 		_times++;
 		//LOGD(LOGTAG_MSG, "Add sendMQ len:%d", GetMQLength());
 		return true;

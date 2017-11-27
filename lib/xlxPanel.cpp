@@ -59,6 +59,7 @@ xlPanelClass::xlPanelClass()
   m_nCCTValue = 0;
   m_bCCTFlag = false;
   m_stSwitch = false;
+  m_nLastOpPast = millis();
 }
 
 xlPanelClass::~xlPanelClass()
@@ -114,6 +115,7 @@ bool xlPanelClass::ProcessEncoder()
 	// Read dimmer value
   int16_t _dimValue;
   int16_t _delta = m_pEncoder->getValue();
+  Serial.printlnf("value = %d",_delta);
   if( GetCCTFlag() ) {
     _dimValue = GetCCTValue();
     _dimValue += _delta;
@@ -184,6 +186,7 @@ void xlPanelClass::SetDimmerValue(int16_t _value)
   _value = constrain(_value, 0, 100);
   if( m_nDimmerValue != _value ) {
 		m_nDimmerValue = _value;
+		m_nLastOpPast = millis();
     SetHC595();
     // Send Light Percentage message
     theSys.ChangeLampBrightness(CURRENT_DEVICE, _value, CURRENT_SUBDEVICE);
@@ -194,9 +197,19 @@ void xlPanelClass::SetDimmerValue(int16_t _value)
 // Update Dimmer value according to confirmation
 void xlPanelClass::UpdateDimmerValue(int16_t _value)
 {
-	// Restrict range
+  uint32_t now = millis();
   _value = constrain(_value, 0, 100);
-  m_nDimmerValue = _value;
+  if(now - m_nLastOpPast > 2000)
+  {
+	  // Restrict range  
+	  m_nDimmerValue = _value;
+	  LOGD(LOGTAG_EVENT, "Update BR to %d", _value);
+  }
+  else
+  {
+	  LOGD(LOGTAG_EVENT, "ingore update BR to %d", _value);
+  }
+
 }
 
 int16_t xlPanelClass::GetCCTValue(const bool _percent)
@@ -211,6 +224,7 @@ void xlPanelClass::SetCCTValue(int16_t _value)
 
 	if( m_nCCTValue != _value ) {
 		m_nCCTValue = _value;
+		m_nLastOpPast = millis();
     SetHC595();
     // Send CCT message
     US cctValue = map(_value, 0, 100, CT_MIN_VALUE, CT_MAX_VALUE);
@@ -221,8 +235,17 @@ void xlPanelClass::SetCCTValue(int16_t _value)
 
 void xlPanelClass::UpdateCCTValue(uint16_t _value)
 {
-  UC cct_dimmer = map(_value, CT_MIN_VALUE, CT_MAX_VALUE, 0, 100);
-  m_nCCTValue = cct_dimmer;
+	uint32_t now = millis();
+	UC cct_dimmer = map(_value, CT_MIN_VALUE, CT_MAX_VALUE, 0, 100);
+	if(now - m_nLastOpPast > 2000)
+	{
+		m_nCCTValue = cct_dimmer;
+		LOGD(LOGTAG_EVENT, "Update cct to %d", cct_dimmer);
+	}
+	else
+	{
+		LOGD(LOGTAG_EVENT, "ingore update cct to %d", cct_dimmer);
+	}
 }
 
 uint8_t xlPanelClass::GetButtonStatus()
