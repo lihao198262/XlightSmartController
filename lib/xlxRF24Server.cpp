@@ -832,14 +832,18 @@ bool RF24ServerClass::ProcessSendMQ()
 	MyMessage lv_msg;
 	UC *pData = (UC *)&(lv_msg.msg);
 	CFastMessageNode *pNode = NULL, *pOld;
-	UC pipe, _repeat, _tag;
-	bool _remove;
+	UC pipe, _repeat;
+	UC _tag = 0;
+	uint32_t _flag = 0;
+	bool _remove = false;
 
 	if( GetMQLength() > 0 ) {
 		while( pNode = GetMessage(pNode) ) {
 			pOld = pNode;
+			// Next node
+			pNode = pOld->m_pNext;
 			// Get message data
-			if( pNode->ReadMessage(pData, &_repeat, &_tag, 15) > 0 )
+			if( pOld->ReadMessage(pData, &_repeat, &_tag, &_flag,15) > 0 )
 			{
 				// Determine pipe
 				if( lv_msg.getCommand() == C_INTERNAL && lv_msg.getType() == I_ID_RESPONSE && lv_msg.isAck() ) {
@@ -865,12 +869,9 @@ bool RF24ServerClass::ProcessSendMQ()
 
 				// Remove message if succeeded or retried enough times
 				if( _remove ) {
-					RemoveMessage(pNode);
+					RemoveMessage(pOld);
 				}
 			}
-
-			// Next node
-			pNode = pOld->m_pNext;
 		}
 	}
 

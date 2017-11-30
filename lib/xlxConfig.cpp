@@ -443,6 +443,7 @@ BOOL ConfigClass::MemReadScenarioRow(ScenarioRow_t &row, uint32_t address)
 
 BOOL ConfigClass::IsValidConfig()
 {
+	LOGW(LOGTAG_MSG, "v=%d,typeMainDevice=%d,maindev=%d",m_config.version,m_config.typeMainDevice, m_config.mainDevID);
 	if( m_config.version == 0xFF
 			|| m_config.timeZone.id == 0
 			|| m_config.timeZone.id > 500
@@ -471,7 +472,7 @@ BOOL ConfigClass::LoadConfig()
     EEPROM.get(MEM_CONFIG_OFFSET, m_config);
     if(!IsValidConfig())
     {	
-	  LOGW(LOGTAG_MSG, "Sysconfig is empty, use default settings.");
+	  LOGW(LOGTAG_MSG, "Sysconfig is empty, load backup config from flash.");
 	  LoadBackupConfig();
 	  if(!IsValidConfig())
 	  {

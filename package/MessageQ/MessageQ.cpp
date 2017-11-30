@@ -48,6 +48,7 @@ CFastMessageNode::CFastMessageNode(uint8_t f_iSize)
 	m_pPrev = NULL;
 	m_pNext = NULL;
 	m_Tag = 0;
+	m_iFlag = 0;
   m_iRepeatTimes = 0;
   m_tickLastRead = 0;
 }
@@ -70,7 +71,7 @@ void CFastMessageNode::WriteMessage(const uint8_t *f_data, uint8_t f_len, uint8_
   m_tickLastRead = 0;
 }
 
-uint8_t CFastMessageNode::ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag, uint8_t f_10ms)
+uint8_t CFastMessageNode::ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag,uint32_t *f_flag, uint8_t f_10ms)
 {
   uint32_t ticknow = millis();
   if(ticknow - m_tickLastRead <= f_10ms * 10) return 0;
@@ -79,6 +80,7 @@ uint8_t CFastMessageNode::ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_
   m_tickLastRead = ticknow;
   if( f_repeat ) *f_repeat = m_iRepeatTimes;
   if( f_Tag )	*f_Tag = m_Tag;
+  if( f_flag )  *f_flag = m_iFlag;
   if( m_nLen > 0 )
     memcpy(f_data, m_pData, m_nLen);
 	return m_nLen;
@@ -190,7 +192,7 @@ uint8_t CFastMessageQ::AddMessage(const uint8_t *f_data, uint8_t f_len, uint8_t 
         lv_retVal = m_iQLength;
 		    if(cmpRet == 2)
 		    { // need update message content
-          lv_pNode->WriteMessage(f_data, f_len, f_Tag,f_flag);
+          lv_pNode->WriteMessage(f_data, f_len, lv_pNode->m_Tag,f_flag);
 		    }
         break;
       }
@@ -198,7 +200,7 @@ uint8_t CFastMessageQ::AddMessage(const uint8_t *f_data, uint8_t f_len, uint8_t 
     }
   }
 
-	if( m_iQLength < m_iMaxQLength && lv_retVal == 0 )
+	if( m_iQLength < m_iMaxQLength && lv_retVal == 0 && cmpRet == 0)
 	{
 		// Set Data
 		m_pQTail->WriteMessage(f_data, f_len, f_Tag,f_flag);
@@ -244,6 +246,10 @@ bool CFastMessageQ::RemoveMessage(CFastMessageNode *pNode)
 	if( pNode == NULL ) pNode = m_pQHead;
   if( pNode != m_pQTail && m_iQLength > 0 ) {
     pNode->ClearMessage();
+	if(pNode == m_pQHead)
+	{
+		m_pQHead = pNode->m_pNext;
+	}
     // Rearrange node chain
     pNode->m_pPrev->m_pNext = pNode->m_pNext;
     pNode->m_pNext->m_pPrev = pNode->m_pPrev;

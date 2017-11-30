@@ -14,15 +14,15 @@ public:
   CFastMessageNode *m_pNext;
   CFastMessageNode *m_pPrev;
   uint8_t m_Tag;
+  uint32_t m_iFlag;           // Message flag
 
   void WriteMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag = 0,  uint32_t f_flag = 0);
-  uint8_t ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag = NULL, uint8_t f_10ms = 0);
+  uint8_t ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag = NULL, uint32_t *f_flag = NULL, uint8_t f_10ms = 0);
   uint8_t CompareMessage(const uint8_t *f_data, uint8_t f_len, uint32_t f_flag = 0);
   void ClearMessage();
 
 private:
   uint8_t *m_pData;					  // Message Data
-  uint32_t m_iFlag;           // Message flag
   uint8_t m_nLen;							// Message Length
   uint8_t m_nSize;						// Buffer size
   uint8_t m_iRepeatTimes;

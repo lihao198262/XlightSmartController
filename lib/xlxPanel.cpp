@@ -115,7 +115,7 @@ bool xlPanelClass::ProcessEncoder()
 	// Read dimmer value
   int16_t _dimValue;
   int16_t _delta = m_pEncoder->getValue();
-  Serial.printlnf("value = %d",_delta);
+  //Serial.printlnf("value = %d",_delta);
   if( GetCCTFlag() ) {
     _dimValue = GetCCTValue();
     _dimValue += _delta;
