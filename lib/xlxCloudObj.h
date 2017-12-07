@@ -98,10 +98,14 @@ public:
   nd_uc_t m_motion;
   nd_uc_t m_irKey;
   nd_us_t m_gas;
-  nd_us_t m_dust;
   nd_us_t m_smoke;
   nd_uc_t m_sound;
   nd_us_t m_noise;
+  nd_us_t m_pm25;
+  nd_us_t m_pm10;
+  nd_float_t m_tvoc;
+  nd_float_t m_ch2o;
+  nd_us_t m_co2;
 
 public:
   CloudObjClass();
@@ -125,6 +129,7 @@ public:
   BOOL UpdateSmoke(uint8_t nid, uint16_t value);
   BOOL UpdateSound(uint8_t nid, uint8_t value);
   BOOL UpdateNoise(uint8_t nid, uint16_t value);
+  BOOL UpdateAirQuality(uint8_t nid, uint16_t pm25,uint16_t pm10,float tvoc,float ch2o,uint16_t co2);
 
   BOOL PublishLog(const char *msg);
   BOOL PublishDeviceStatus(const char *msg);

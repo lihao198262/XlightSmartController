@@ -65,6 +65,8 @@ int NodeListClass::getFlashSize()
 bool NodeListClass::loadList()
 {
 	NodeIdRow_t lv_Node;
+	memset(&lv_Node,0x00,sizeof(NodeIdRow_t));
+	bool bEEPROMLoadRet = true;
 	for(int i = 0; i < theConfig.GetNumNodes(); i++) {
 		int offset = MEM_NODELIST_OFFSET + i * sizeof(NodeIdRow_t);
 		if( offset >= MEM_NODELIST_OFFSET + MEM_NODELIST_LEN - sizeof(NodeIdRow_t) ) break;
@@ -73,28 +75,38 @@ bool NodeListClass::loadList()
 		// Initialize two preset nodes
 		if( i == 0 ) {
 			if( lv_Node.nid != NODEID_MAINDEVICE ) {
+				bEEPROMLoadRet = false;
 				lv_Node.nid = NODEID_MAINDEVICE;
 				resetIdentity(lv_Node.identity);
 				lv_Node.device = 0;
 				lv_Node.recentActive = 0;
 				m_isChanged = true;
 			}
-		} else if(  i == 1 && theConfig.GetNumNodes() <= 2 ) {
-			if( lv_Node.nid != NODEID_MIN_REMOTE ) {
-				lv_Node.nid = NODEID_MIN_REMOTE;
-				resetIdentity(lv_Node.identity);
-				lv_Node.device = NODEID_MAINDEVICE;
-				lv_Node.recentActive = 0;
-				m_isChanged = true;
-			}
+		} else if(  i == 1 )
+			{
+				if(!bEEPROMLoadRet || theConfig.GetNumNodes() <= 2 )
+					{ //eeprom node info false,use default
+						if( lv_Node.nid != NODEID_MIN_REMOTE ) {
+							lv_Node.nid = NODEID_MIN_REMOTE;
+							resetIdentity(lv_Node.identity);
+							lv_Node.device = NODEID_MAINDEVICE;
+							lv_Node.recentActive = 0;
+							m_isChanged = true;
+						}
+					}
+
 		} else if( lv_Node.nid == NODEID_DUMMY || lv_Node.nid == 0 ) {
 			theConfig.SetNumNodes(count());
 			break;
 		}
 		if( add(&lv_Node) < 0 ) break;
+		else
+		{
+			Serial.printlnf("add node=%d success",lv_Node.nid);
+		}
 	}
-	saveList();
-	return true;
+	//saveList();
+	return bEEPROMLoadRet;
 }
 
 bool NodeListClass::saveList()
@@ -111,6 +123,20 @@ bool NodeListClass::saveList()
 		memset(lv_buf, 0x00, sizeof(lv_buf));
 		memcpy(lv_buf, _pItems, sizeof(NodeIdRow_t) * count());
 		EEPROM.put(MEM_NODELIST_OFFSET, lv_buf);
+		uint8_t attemps = 0;
+		while(++attemps <=3 )
+		{
+			if(theConfig.getP1Flash()->write<NodeIdRow_t[MAX_NODE_PER_CONTROLLER]>(lv_buf, MEM_NODELIST_BACKUP_OFFSET))
+			{
+				Serial.println("write nodelist backup success!");
+				break;
+			}
+			else
+			{
+				Serial.println("write nodelist backup failed!");
+			}
+
+		}
 		theConfig.SetNumNodes(count());
 	}
 	return true;
@@ -471,7 +497,7 @@ BOOL ConfigClass::LoadConfig()
   {
     EEPROM.get(MEM_CONFIG_OFFSET, m_config);
     if(!IsValidConfig())
-    {	
+    {
 	  LOGW(LOGTAG_MSG, "Sysconfig is empty, load backup config from flash.");
 	  LoadBackupConfig();
 	  if(!IsValidConfig())
@@ -1405,7 +1431,7 @@ BOOL ConfigClass::ExecuteBtnAction(const UC _btn, const UC _opt)
 				if( BITTEST(m_config.btnAction[_btn][_opt].keyMap, idx) ) {
 					_key = idx + 1;
 					_st = (m_config.btnAction[_btn][_opt].action == DEVICE_SW_TOGGLE ? !(theSys.relay_get_key(_key)) : m_config.btnAction[_btn][_opt].action == DEVICE_SW_ON);
-					//SERIAL_LN("test: btn:%d opt:%d set key:%d to %d", _btn, _opt, _key, _st);				
+					//SERIAL_LN("test: btn:%d opt:%d set key:%d to %d", _btn, _opt, _key, _st);
 					if(theConfig.GetDisableLamp())
 					{
 						theSys.relay_set_key(_key, _st);
@@ -1415,7 +1441,7 @@ BOOL ConfigClass::ExecuteBtnAction(const UC _btn, const UC _opt)
 					{
 						theSys.relay_set_key(_key, _st);
 					}
-					
+
 				}
 			}
 			return true;
@@ -1499,6 +1525,43 @@ BOOL ConfigClass::LoadBackupConfig()
 #else
 	return false;
 #endif
+}
+
+BOOL ConfigClass::LoadBackupNodeList()
+{
+#ifdef MCU_TYPE_P1
+	NodeIdRow_t NodeArray[MAX_NODE_PER_CONTROLLER];
+	if (sizeof(NodeIdRow_t)*MAX_NODE_PER_CONTROLLER <= MEM_NODELIST_BACKUP_LEN)
+	{
+		if (P1Flash->read<NodeIdRow_t[MAX_NODE_PER_CONTROLLER]>(NodeArray, MEM_NODELIST_BACKUP_OFFSET))
+		{
+			for (int i = 0; i < theConfig.GetNumNodes(); i++) //interate through RuleArray for non-empty rows
+			{
+					if (lstNodes.add(&NodeArray[i]) < 0)
+					{
+						LOGW(LOGTAG_MSG, "Backup node row %d failed to load from flash", i);
+						return false;
+					}
+					else
+					{
+						LOGW(LOGTAG_MSG, "Backup node row %d success to load from flash-nodeid=%d", i,NodeArray[i].nid);
+					}
+			}
+		}
+		else
+		{
+			LOGW(LOGTAG_MSG, "Failed to read the backup node list from flash.");
+			return false;
+		}
+	}
+	else
+	{
+		LOGW(LOGTAG_MSG, "Failed to load backup node list, too large.");
+		return false;
+	}
+#endif
+
+	return true;
 }
 
 BOOL ConfigClass::SaveBackupConfig()
@@ -1818,7 +1881,10 @@ BOOL ConfigClass::LoadNodeIDList()
 		LOGD(LOGTAG_MSG, "NodeList loaded - %d", lstNodes.count());
 	} else {
 		LOGW(LOGTAG_MSG, "Failed to load NodeList.");
+		rc = LoadBackupNodeList();
 	}
+	m_isChanged = true;
+	lstNodes.saveList();
 	return rc;
 }
 

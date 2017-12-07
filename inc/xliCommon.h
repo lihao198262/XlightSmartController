@@ -124,7 +124,12 @@ typedef enum
   sensorBEAT,
   sensorIRKey = 15,
   sensorDHT_h = 16, // won't occupy bit position
-  sensorMIC_b
+  sensorMIC_b,
+  sensorPM25,
+  sensorPM10,
+  sensorTVOC,
+  sensorCH2O,
+  sensorCO2
 } sensors_t;
 
 // Sensor scope

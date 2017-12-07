@@ -2135,8 +2135,8 @@ bool SmartControllerClass::Check_SensorData(UC _thisNd, UC _scope, UC _sr, UC _n
 			senData = m_smoke.data;
 		} else if( _sr == sensorGAS && _nd == m_gas.node_id ) {
 			senData = m_gas.data;
-		} else if( _sr == sensorDUST && _nd == m_dust.node_id ) {
-			senData = m_dust.data;
+		} else if( _sr == sensorDUST && _nd == m_pm25.node_id ) {
+			senData = m_pm25.data;
 		}
 		break;
 

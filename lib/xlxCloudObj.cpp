@@ -60,14 +60,27 @@ CloudObjClass::CloudObjClass()
   m_gas.node_id = 0;
   m_gas.data = 0;
 
-  m_dust.node_id = 0;
-  m_dust.data = 0;
 
   m_smoke.node_id = 0;
   m_smoke.data = 0;
 
   m_noise.node_id = 0;
   m_noise.data = 0;
+
+  m_pm25.node_id = 0;
+  m_pm25.data = 0;
+
+  m_pm10.node_id = 0;
+  m_pm10.data = 0;
+
+  m_tvoc.node_id = 0;
+  m_tvoc.data = 0;
+
+  m_ch2o.node_id = 0;
+  m_ch2o.data = 0;
+
+  m_co2.node_id = 0;
+  m_co2.data = 0;
 
   m_strCldCmd = "";
 }
@@ -258,12 +271,62 @@ BOOL CloudObjClass::UpdateGas(uint8_t nid, uint16_t value)
   return false;
 }
 
+BOOL CloudObjClass::UpdateAirQuality(uint8_t nid, uint16_t pm25,uint16_t pm10,float tvoc,float ch2o,uint16_t co2)
+{
+	BOOL bNeedSendMsg = false;
+	if( m_pm25.data != pm25 || m_pm25.node_id != nid )
+		{
+			m_pm25.node_id = nid;
+			m_pm25.data = pm25;
+			OnSensorDataChanged(sensorPM25, nid);
+			bNeedSendMsg = true;
+		}
+		if( m_pm10.data != pm10 || m_pm10.node_id != nid )
+		{
+			m_pm10.node_id = nid;
+			m_pm10.data = pm10;
+			OnSensorDataChanged(sensorPM10, nid);
+			bNeedSendMsg = true;
+		}
+		if( m_tvoc.data != tvoc || m_tvoc.node_id != nid )
+		{
+			m_tvoc.node_id = nid;
+			m_tvoc.data = tvoc;
+			OnSensorDataChanged(sensorTVOC, nid);
+			bNeedSendMsg = true;
+		}
+		if( m_ch2o.data != ch2o || m_ch2o.node_id != nid )
+		{
+			m_ch2o.node_id = nid;
+			m_ch2o.data = ch2o;
+			OnSensorDataChanged(sensorCH2O, nid);
+			bNeedSendMsg = true;
+		}
+		if( m_co2.data != co2 || m_co2.node_id != nid )
+		{
+			m_co2.node_id = nid;
+			m_co2.data = co2;
+			OnSensorDataChanged(sensorCO2, nid);
+			bNeedSendMsg = true;
+		}
+
+
+		if( !theConfig.GetDisableWiFi() && bNeedSendMsg ) {
+			// Publis right away
+			if( Particle.connected() ) {
+				String strTemp = String::format("{'nd':%d,'PM25':%d,'PM10':%d,'TVOC':%.2f,'CH2O':%.2f,'CO2':%d}", nid,pm25,pm10,tvoc,ch2o,co2 );
+				Particle.publish(CLT_NAME_SensorData, strTemp, CLT_TTL_MotionData, PRIVATE);
+			}
+		}
+		return true;
+}
+
 BOOL CloudObjClass::UpdateDust(uint8_t nid, uint16_t value)
 {
-  if( m_dust.data != value || m_dust.node_id != nid ) {
-    m_dust.node_id = nid;
-    m_dust.data = value;
-    OnSensorDataChanged(sensorDUST, nid);
+  if( m_pm25.data != value || m_pm25.node_id != nid ) {
+    m_pm25.node_id = nid;
+    m_pm25.data = value;
+    OnSensorDataChanged(sensorPM25, nid);
     if( !theConfig.GetDisableWiFi() ) {
       // Publis right away
       if( Particle.connected() ) {

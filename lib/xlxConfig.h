@@ -403,6 +403,10 @@ public:
   ConfigClass();
   void InitConfig();
   BOOL InitDevStatus(UC nodeID);
+  Flashee::FlashDevice* getP1Flash()
+  {
+	  return P1Flash;
+  }
 
   // write to P1 using spark-flashee-eeprom
   BOOL MemWriteScenarioRow(ScenarioRow_t row, uint32_t address);
@@ -427,6 +431,7 @@ public:
 
   BOOL LoadNodeIDList();
   BOOL SaveNodeIDList();
+  BOOL LoadBackupNodeList();
 
   BOOL IsConfigChanged();
   void SetConfigChanged(BOOL flag);

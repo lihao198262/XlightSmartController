@@ -400,7 +400,7 @@ bool RF24ServerClass::ProcessSend(MyMessage *pMsg)
 	// Add message to sending MQ. Right now tag has no actual purpose (just for debug)
 	uint32_t flag = 0;
 	flag = ((uint32_t)pMsg->getSensor()<<24) | ((uint32_t)pMsg->getCommand()<<16) | ((uint32_t)pMsg->getType()<<8) | (pMsg->getDestination());
-	LOGW(LOGTAG_MSG, "flag=%d,d=%d,cmd=%d,type=%d,sensor=%d",flag,pMsg->getDestination(),pMsg->getCommand(),pMsg->getType(),pMsg->getSensor());
+	//LOGD(LOGTAG_MSG, "flag=%d,d=%d,cmd=%d,type=%d,sensor=%d",flag,pMsg->getDestination(),pMsg->getCommand(),pMsg->getType(),pMsg->getSensor());
 	if( AddMessage((UC *)&(pMsg->msg), MAX_MESSAGE_LENGTH, GetMQLength(), flag) > 0 ) {
 		_times++;
 		//LOGD(LOGTAG_MSG, "Add sendMQ len:%d", GetMQLength());
@@ -670,7 +670,18 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							if( _sensor == S_DUST ) {
 								theSys.UpdateDust(replyTo, _iValue);
 							} else if( _sensor == S_AIR_QUALITY ) {
-								theSys.UpdateGas(replyTo, _iValue);
+								if(payl_len >= 10)
+								{
+								  US pm10 = payload[3] * 256 + payload[2];
+									float tvoc = (payload[5] * 256 + payload[4])/10.0;
+									float ch2o = (payload[7] * 256 + payload[6])/10.0;
+									US co2 = payload[9] * 256 + payload[8];
+									theSys.UpdateAirQuality(replyTo, _iValue,pm10,tvoc,ch2o,co2);
+								}
+								else
+								{
+									theSys.UpdateGas(replyTo, _iValue);
+								}
 							} else if( _sensor == S_SMOKE ) {
 								theSys.UpdateSmoke(replyTo, _iValue);
 							}
