@@ -748,7 +748,7 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							//bDataChanged = true;
 						} else if( msgType == V_RELAY_MAP ) {
 							// Publish Relay Status
-							strTemp = String::format("{'nd':%d,'km':%d}", replyTo, payload[0]);
+							strTemp = String::format("{'nd':%d,'subid':%d,'km':%d}", replyTo, _sensor,payload[0]);
 							theSys.PublishDeviceStatus(strTemp.c_str());
 							//bDataChanged = true;
 						}

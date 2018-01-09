@@ -112,26 +112,28 @@ bool xlPanelClass::ProcessEncoder()
 {
   if( !m_pEncoder ) return false;
 
-	// Read dimmer value
-  int16_t _dimValue;
-  int16_t _delta = m_pEncoder->getValue();
-  //Serial.printlnf("value = %d",_delta);
-  if( GetCCTFlag() ) {
-    _dimValue = GetCCTValue();
-    _dimValue += _delta;
-  	SetCCTValue(_dimValue);
-
-    // CCT idle timeout: automatically clear CCT flag
-    if( _delta > 0 ) {
-      m_nCCTick = millis();
-    } else if( (millis() - m_nCCTick) / 1000 > RTE_TM_MAX_CCT_IDLE ) {
-      // Clear CCT flag
-      SetCCTFlag(false);
-    }
-  } else {
-  	_dimValue = GetDimmerValue();
-    _dimValue += _delta;
-  	SetDimmerValue(_dimValue);
+  if(!theConfig.GetDisableLamp())
+  {
+	  // Read dimmer value
+	  int16_t _dimValue;
+	  int16_t _delta = m_pEncoder->getValue();
+	  //Serial.printlnf("value = %d",_delta);
+	  if( GetCCTFlag() ) {
+		  _dimValue = GetCCTValue();
+		  _dimValue += _delta;
+		  SetCCTValue(_dimValue);
+		  // CCT idle timeout: automatically clear CCT flag
+		  if( _delta > 0 ) {
+			  m_nCCTick = millis();
+		  } else if( (millis() - m_nCCTick) / 1000 > RTE_TM_MAX_CCT_IDLE ) {
+			  // Clear CCT flag
+			  SetCCTFlag(false);
+		  }
+	  } else {
+		  _dimValue = GetDimmerValue();
+		  _dimValue += _delta;
+		  SetDimmerValue(_dimValue);
+	  }
   }
 
 	// Read button input
@@ -201,7 +203,7 @@ void xlPanelClass::UpdateDimmerValue(int16_t _value)
   _value = constrain(_value, 0, 100);
   if(now - m_nLastOpPast > 2000)
   {
-	  // Restrict range  
+	  // Restrict range
 	  m_nDimmerValue = _value;
 	  LOGD(LOGTAG_EVENT, "Update BR to %d", _value);
   }
