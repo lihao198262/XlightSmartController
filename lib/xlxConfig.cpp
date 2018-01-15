@@ -65,6 +65,8 @@ int NodeListClass::getFlashSize()
 bool NodeListClass::loadList()
 {
 	NodeIdRow_t lv_Node;
+	memset(&lv_Node,0x00,sizeof(NodeIdRow_t));
+	bool bEEPROMLoadRet = true;
 	for(int i = 0; i < theConfig.GetNumNodes(); i++) {
 		int offset = MEM_NODELIST_OFFSET + i * sizeof(NodeIdRow_t);
 		if( offset >= MEM_NODELIST_OFFSET + MEM_NODELIST_LEN - sizeof(NodeIdRow_t) ) break;
@@ -73,28 +75,38 @@ bool NodeListClass::loadList()
 		// Initialize two preset nodes
 		if( i == 0 ) {
 			if( lv_Node.nid != NODEID_MAINDEVICE ) {
+				bEEPROMLoadRet = false;
 				lv_Node.nid = NODEID_MAINDEVICE;
 				resetIdentity(lv_Node.identity);
 				lv_Node.device = 0;
 				lv_Node.recentActive = 0;
 				m_isChanged = true;
 			}
-		} else if(  i == 1 && theConfig.GetNumNodes() <= 2 ) {
-			if( lv_Node.nid != NODEID_MIN_REMOTE ) {
-				lv_Node.nid = NODEID_MIN_REMOTE;
-				resetIdentity(lv_Node.identity);
-				lv_Node.device = NODEID_MAINDEVICE;
-				lv_Node.recentActive = 0;
-				m_isChanged = true;
-			}
+		} else if(  i == 1 )
+			{
+				if(!bEEPROMLoadRet || theConfig.GetNumNodes() <= 2 )
+					{ //eeprom node info false,use default
+						if( lv_Node.nid != NODEID_MIN_REMOTE ) {
+							lv_Node.nid = NODEID_MIN_REMOTE;
+							resetIdentity(lv_Node.identity);
+							lv_Node.device = NODEID_MAINDEVICE;
+							lv_Node.recentActive = 0;
+							m_isChanged = true;
+						}
+					}
+
 		} else if( lv_Node.nid == NODEID_DUMMY || lv_Node.nid == 0 ) {
 			theConfig.SetNumNodes(count());
 			break;
 		}
 		if( add(&lv_Node) < 0 ) break;
+		else
+		{
+			Serial.printlnf("add node=%d success",lv_Node.nid);
+		}
 	}
-	saveList();
-	return true;
+	//saveList();
+	return bEEPROMLoadRet;
 }
 
 bool NodeListClass::saveList()
@@ -111,6 +123,20 @@ bool NodeListClass::saveList()
 		memset(lv_buf, 0x00, sizeof(lv_buf));
 		memcpy(lv_buf, _pItems, sizeof(NodeIdRow_t) * count());
 		EEPROM.put(MEM_NODELIST_OFFSET, lv_buf);
+		uint8_t attemps = 0;
+		while(++attemps <=3 )
+		{
+			if(theConfig.getP1Flash()->write<NodeIdRow_t[MAX_NODE_PER_CONTROLLER]>(lv_buf, MEM_NODELIST_BACKUP_OFFSET))
+			{
+				Serial.println("write nodelist backup success!");
+				break;
+			}
+			else
+			{
+				Serial.println("write nodelist backup failed!");
+			}
+
+		}
 		theConfig.SetNumNodes(count());
 	}
 	return true;
@@ -238,14 +264,12 @@ UC NodeListClass::getAvailableNodeId(UC preferID, UC defaultID, UC minID, UC max
 {
 	UC oldestNode = 0;
 	UL oldestTime = Time.now();
-	BOOL bFound = false;
 	NodeIdRow_t lv_Node;
 
 	// Stage 1: Check preferID
 	if( preferID > 0 && preferID < NODEID_DUMMY ) {
 		lv_Node.nid = preferID;
 		if( get(&lv_Node) >= 0 ) {
-			bFound = true;
 			// preferID is found and matched, reuse it
 			if( lv_Node.recentActive == 0 || isIdentityEmpty(lv_Node.identity) || isIdentityEqual(lv_Node.identity, &identity) ) {
 				return preferID;
@@ -379,6 +403,8 @@ void ConfigClass::InitConfig()
 	m_config.rfPowerLevel = RF24_PA_LEVEL_GW;
 	m_config.rfDataRate = RF24_DATARATE;
 	m_config.maxBaseNetworkDuration = MAX_BASE_NETWORK_DUR;
+	m_config.disableWiFi = 0;
+	m_config.disableLamp = 1;
 	m_config.useCloud = CLOUD_ENABLE;
 	m_config.stWiFi = 1;
 	m_config.bcMsgRtpTimes = 3;
@@ -441,36 +467,55 @@ BOOL ConfigClass::MemReadScenarioRow(ScenarioRow_t &row, uint32_t address)
 #endif
 }
 
+BOOL ConfigClass::IsValidConfig()
+{
+	LOGW(LOGTAG_MSG, "v=%d,typeMainDevice=%d,maindev=%d",m_config.version,m_config.typeMainDevice, m_config.mainDevID);
+	if( m_config.version == 0xFF
+			|| m_config.timeZone.id == 0
+			|| m_config.timeZone.id > 500
+			|| m_config.timeZone.dst > 1
+			|| m_config.timeZone.offset < -780
+			|| m_config.timeZone.offset > 780
+			|| m_config.numDevices > MAX_DEVICE_PER_CONTROLLER
+			|| m_config.numNodes < 2
+			|| m_config.numNodes > MAX_NODE_PER_CONTROLLER
+			|| m_config.typeMainDevice == devtypUnknown
+			|| m_config.typeMainDevice >= devtypDummy
+			|| m_config.rfPowerLevel > RF24_PA_MAX
+		 	|| m_config.useCloud > CLOUD_MUST_CONNECT
+		 	|| (IS_NOT_DEVICE_NODEID(m_config.mainDevID) && m_config.mainDevID != NODEID_DUMMY) )
+    {
+		return false;
+	}
+	return true;
+}
+
 BOOL ConfigClass::LoadConfig()
 {
   // Load System Configuration
   if( sizeof(Config_t) <= MEM_CONFIG_LEN )
   {
     EEPROM.get(MEM_CONFIG_OFFSET, m_config);
-    if( m_config.version == 0xFF
-      || m_config.timeZone.id == 0
-      || m_config.timeZone.id > 500
-      || m_config.timeZone.dst > 1
-      || m_config.timeZone.offset < -780
-      || m_config.timeZone.offset > 780
-      || m_config.numDevices > MAX_DEVICE_PER_CONTROLLER
-			|| m_config.numNodes < 2
-			|| m_config.numNodes > MAX_NODE_PER_CONTROLLER
-      || m_config.typeMainDevice == devtypUnknown
-      || m_config.typeMainDevice >= devtypDummy
-			|| m_config.rfPowerLevel > RF24_PA_MAX
-		 	|| m_config.useCloud > CLOUD_MUST_CONNECT
-		 	|| (IS_NOT_DEVICE_NODEID(m_config.mainDevID) && m_config.mainDevID != NODEID_DUMMY) )
+    if(!IsValidConfig())
     {
-      InitConfig();
-      m_isChanged = true;
-      LOGW(LOGTAG_MSG, "Sysconfig is empty, use default settings.");
-      SaveConfig();
+	  LOGW(LOGTAG_MSG, "Sysconfig is empty, load backup config from flash.");
+	  LoadBackupConfig();
+	  if(!IsValidConfig())
+	  {
+        InitConfig();
+        m_isChanged = true;
+        LOGW(LOGTAG_MSG, "Sys backconfig is empty, use default settings.");
+        SaveConfig();
+	  }
+	  else
+      {
+		LOGW(LOGTAG_MSG, "Sys backconfig loaded.");
+      }
     }
     else
     {
 			m_config.version = VERSION_CONFIG_DATA;
-      LOGI(LOGTAG_MSG, "Sysconfig loaded.");
+      LOGW(LOGTAG_MSG, "Sysconfig loaded.");
     }
     m_isLoaded = true;
     m_isChanged = false;
@@ -504,6 +549,12 @@ BOOL ConfigClass::SaveConfig()
     EEPROM.put(MEM_CONFIG_OFFSET, m_config);
     m_isChanged = false;
     LOGI(LOGTAG_MSG, "Sysconfig saved.");
+	uint8_t attemps = 0;
+	while(++attemps <=3 )
+    {
+		if(SaveBackupConfig())
+			break;
+    }
   }
 
 	// Save Device Status
@@ -822,13 +873,15 @@ void ConfigClass::DoTimeSync()
 
 BOOL ConfigClass::CloudTimeSync(BOOL _force)
 {
-	if( _force ) {
-		DoTimeSync();
-		return true;
-	} else if( theConfig.IsDailyTimeSyncEnabled() ) {
-		if( (millis() - m_lastTimeSync) / 1000 > SECS_PER_DAY ) {
+	if( Particle.connected() ) {
+		if( _force ) {
 			DoTimeSync();
 			return true;
+		} else if( theConfig.IsDailyTimeSyncEnabled() ) {
+			if( (millis() - m_lastTimeSync) / 1000 > SECS_PER_DAY ) {
+				DoTimeSync();
+				return true;
+			}
 		}
 	}
 	return false;
@@ -1015,6 +1068,38 @@ BOOL ConfigClass::SetMaxBaseNetworkDur(US dur)
 	if( dur != m_config.maxBaseNetworkDuration ) {
 		m_config.maxBaseNetworkDuration = dur;
 		m_isChanged = true;
+		return true;
+	}
+	return false;
+}
+
+BOOL ConfigClass::GetDisableWiFi()
+{
+  return m_config.disableWiFi;
+}
+
+BOOL ConfigClass::SetDisableWiFi(BOOL _st)
+{
+  if( _st != m_config.disableWiFi ) {
+    m_config.disableWiFi = _st;
+    m_isChanged = true;
+		SERIAL_LN("Wi-Fi chip %s", _st ? "disabled" : "enabled");
+    return true;
+  }
+  return false;
+}
+
+BOOL ConfigClass::GetDisableLamp()
+{
+	return m_config.disableLamp;
+}
+
+BOOL ConfigClass::SetDisableLamp(BOOL _st)
+{
+	if( _st != m_config.disableLamp ) {
+		m_config.disableLamp = _st;
+		m_isChanged = true;
+		SERIAL_LN("Lamp chip %s", _st ? "disabled" : "enabled");
 		return true;
 	}
 	return false;
@@ -1309,6 +1394,18 @@ void ConfigClass::showKeyMap()
 	}
 }
 
+UC ConfigClass::GetKeyOnNum()
+{
+	UC num = 0;
+	for( UC _code = 0; _code < MAX_KEY_MAP_ITEMS; _code++ ) {
+		if( m_config.keyMap[_code].nid > 0 ) {
+			if(theSys.relay_get_key(_code + 1))
+				num++;
+		}
+	}
+	return num;
+}
+
 BOOL ConfigClass::SetExtBtnAction(const UC _btn, const UC _opt, const UC _act, const UC _keymap)
 {
 	if( _btn < MAX_NUM_BUTTONS && _opt < MAX_BTN_OP_TYPE ) {
@@ -1335,7 +1432,16 @@ BOOL ConfigClass::ExecuteBtnAction(const UC _btn, const UC _opt)
 					_key = idx + 1;
 					_st = (m_config.btnAction[_btn][_opt].action == DEVICE_SW_TOGGLE ? !(theSys.relay_get_key(_key)) : m_config.btnAction[_btn][_opt].action == DEVICE_SW_ON);
 					//SERIAL_LN("test: btn:%d opt:%d set key:%d to %d", _btn, _opt, _key, _st);
-					theSys.relay_set_key(_key, _st);
+					if(theConfig.GetDisableLamp())
+					{
+						theSys.relay_set_key(_key, _st);
+						thePanel.SetRingOnOff(_st);
+					}
+					else
+					{
+						theSys.relay_set_key(_key, _st);
+					}
+
 				}
 			}
 			return true;
@@ -1410,6 +1516,61 @@ BOOL ConfigClass::LoadDeviceStatus()
 	}
 
 	return true;
+}
+
+BOOL ConfigClass::LoadBackupConfig()
+{
+#ifdef MCU_TYPE_P1
+	return P1Flash->read<Config_t>(m_config, MEM_CONFIG_BACKUP_OFFSET);
+#else
+	return false;
+#endif
+}
+
+BOOL ConfigClass::LoadBackupNodeList()
+{
+#ifdef MCU_TYPE_P1
+	NodeIdRow_t NodeArray[MAX_NODE_PER_CONTROLLER];
+	if (sizeof(NodeIdRow_t)*MAX_NODE_PER_CONTROLLER <= MEM_NODELIST_BACKUP_LEN)
+	{
+		if (P1Flash->read<NodeIdRow_t[MAX_NODE_PER_CONTROLLER]>(NodeArray, MEM_NODELIST_BACKUP_OFFSET))
+		{
+			for (int i = 0; i < theConfig.GetNumNodes(); i++) //interate through RuleArray for non-empty rows
+			{
+					if (lstNodes.add(&NodeArray[i]) < 0)
+					{
+						LOGW(LOGTAG_MSG, "Backup node row %d failed to load from flash", i);
+						return false;
+					}
+					else
+					{
+						LOGW(LOGTAG_MSG, "Backup node row %d success to load from flash-nodeid=%d", i,NodeArray[i].nid);
+					}
+			}
+		}
+		else
+		{
+			LOGW(LOGTAG_MSG, "Failed to read the backup node list from flash.");
+			return false;
+		}
+	}
+	else
+	{
+		LOGW(LOGTAG_MSG, "Failed to load backup node list, too large.");
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+BOOL ConfigClass::SaveBackupConfig()
+{
+#ifdef MCU_TYPE_P1
+	return P1Flash->write<Config_t>(m_config, MEM_CONFIG_BACKUP_OFFSET);
+#else
+	return false;
+#endif
 }
 
 // Save Device Status
@@ -1720,7 +1881,10 @@ BOOL ConfigClass::LoadNodeIDList()
 		LOGD(LOGTAG_MSG, "NodeList loaded - %d", lstNodes.count());
 	} else {
 		LOGW(LOGTAG_MSG, "Failed to load NodeList.");
+		rc = LoadBackupNodeList();
 	}
+	m_isChanged = true;
+	lstNodes.saveList();
 	return rc;
 }
 

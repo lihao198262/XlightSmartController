@@ -2,4 +2,6 @@
 *.iobj
 *.ipdb
 *.pdb
+*.bat
 compile
+output

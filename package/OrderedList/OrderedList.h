@@ -220,7 +220,6 @@ bool OrderdList<T>::remove(T *_pT) {
   int pos = get(_pT);
   if( pos >= 0 ) {
     // Move data
-    int _size = sizeof(T) * pos;
     for( int i = pos; i < _count - 1; i++ ) {
         _pItems[i] = _pItems[i+1];
     }

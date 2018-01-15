@@ -28,10 +28,13 @@ private:
   UC m_loopKeyCode;
   UL m_tickLoopKeyCode;
   UC m_relaykeyflag;
+  uint8_t m_mac[6];
 
   String hue_to_string(Hue_t hue);
   bool updateDevStatusRow(MyMessage msg);
-
+public:
+	void GetMac(uint8_t *mac);
+	void SetMac(uint8_t *mac);
 public:
   SmartControllerClass();
   void Init();

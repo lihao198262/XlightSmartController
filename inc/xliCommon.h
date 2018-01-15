@@ -124,7 +124,12 @@ typedef enum
   sensorBEAT,
   sensorIRKey = 15,
   sensorDHT_h = 16, // won't occupy bit position
-  sensorMIC_b
+  sensorMIC_b,
+  sensorPM25,
+  sensorPM10,
+  sensorTVOC,
+  sensorCH2O,
+  sensorCO2
 } sensors_t;
 
 // Sensor scope
@@ -224,6 +229,8 @@ typedef enum
 //--------------------------------------------------
 // Tools & Helpers
 //--------------------------------------------------
+int wal_stricmp(const char *a, const char *b);
+int wal_strnicmp(const char *a, const char *b, uint8_t len);
 uint8_t h2i(const char c);
 char* PrintUint64(char *buf, uint64_t value, bool bHex = true);
 char* PrintMacAddress(char *buf, const uint8_t *mac, char delim = ':', bool bShort = true);

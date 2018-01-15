@@ -59,6 +59,7 @@ xlPanelClass::xlPanelClass()
   m_nCCTValue = 0;
   m_bCCTFlag = false;
   m_stSwitch = false;
+  m_nLastOpPast = millis();
 }
 
 xlPanelClass::~xlPanelClass()
@@ -111,25 +112,28 @@ bool xlPanelClass::ProcessEncoder()
 {
   if( !m_pEncoder ) return false;
 
-	// Read dimmer value
-  int16_t _dimValue;
-  int16_t _delta = m_pEncoder->getValue();
-  if( GetCCTFlag() ) {
-    _dimValue = GetCCTValue();
-    _dimValue += _delta;
-  	SetCCTValue(_dimValue);
-
-    // CCT idle timeout: automatically clear CCT flag
-    if( _delta > 0 ) {
-      m_nCCTick = millis();
-    } else if( (millis() - m_nCCTick) / 1000 > RTE_TM_MAX_CCT_IDLE ) {
-      // Clear CCT flag
-      SetCCTFlag(false);
-    }
-  } else {
-  	_dimValue = GetDimmerValue();
-    _dimValue += _delta;
-  	SetDimmerValue(_dimValue);
+  if(!theConfig.GetDisableLamp())
+  {
+	  // Read dimmer value
+	  int16_t _dimValue;
+	  int16_t _delta = m_pEncoder->getValue();
+	  //Serial.printlnf("value = %d",_delta);
+	  if( GetCCTFlag() ) {
+		  _dimValue = GetCCTValue();
+		  _dimValue += _delta;
+		  SetCCTValue(_dimValue);
+		  // CCT idle timeout: automatically clear CCT flag
+		  if( _delta > 0 ) {
+			  m_nCCTick = millis();
+		  } else if( (millis() - m_nCCTick) / 1000 > RTE_TM_MAX_CCT_IDLE ) {
+			  // Clear CCT flag
+			  SetCCTFlag(false);
+		  }
+	  } else {
+		  _dimValue = GetDimmerValue();
+		  _dimValue += _delta;
+		  SetDimmerValue(_dimValue);
+	  }
   }
 
 	// Read button input
@@ -150,7 +154,7 @@ bool xlPanelClass::ProcessEncoder()
         CheckHeldTimeout(m_pEncoder->getHeldDuration());
         break;
       case BUTTON_CLICKED:
-        LOGD(LOGTAG_ACTION, "Button Clicked");
+        LOGD(LOGTAG_ACTION, "Button Clicked,keyobj=%d",theConfig.GetRelayKeyObj());
         if( theConfig.GetRelayKeyObj() == BTN_OBJ_SCAN_KEY_MAP ) {
           theSys.ToggleAllHardSwitchs();
         } else if( theConfig.GetRelayKeyObj() == BTN_OBJ_LOOP_KEY_MAP ) {
@@ -184,6 +188,7 @@ void xlPanelClass::SetDimmerValue(int16_t _value)
   _value = constrain(_value, 0, 100);
   if( m_nDimmerValue != _value ) {
 		m_nDimmerValue = _value;
+		m_nLastOpPast = millis();
     SetHC595();
     // Send Light Percentage message
     theSys.ChangeLampBrightness(CURRENT_DEVICE, _value, CURRENT_SUBDEVICE);
@@ -194,9 +199,19 @@ void xlPanelClass::SetDimmerValue(int16_t _value)
 // Update Dimmer value according to confirmation
 void xlPanelClass::UpdateDimmerValue(int16_t _value)
 {
-	// Restrict range
+  uint32_t now = millis();
   _value = constrain(_value, 0, 100);
-  m_nDimmerValue = _value;
+  if(now - m_nLastOpPast > 2000)
+  {
+	  // Restrict range
+	  m_nDimmerValue = _value;
+	  LOGD(LOGTAG_EVENT, "Update BR to %d", _value);
+  }
+  else
+  {
+	  LOGD(LOGTAG_EVENT, "ingore update BR to %d", _value);
+  }
+
 }
 
 int16_t xlPanelClass::GetCCTValue(const bool _percent)
@@ -211,6 +226,7 @@ void xlPanelClass::SetCCTValue(int16_t _value)
 
 	if( m_nCCTValue != _value ) {
 		m_nCCTValue = _value;
+		m_nLastOpPast = millis();
     SetHC595();
     // Send CCT message
     US cctValue = map(_value, 0, 100, CT_MIN_VALUE, CT_MAX_VALUE);
@@ -221,8 +237,17 @@ void xlPanelClass::SetCCTValue(int16_t _value)
 
 void xlPanelClass::UpdateCCTValue(uint16_t _value)
 {
-  UC cct_dimmer = map(_value, CT_MIN_VALUE, CT_MAX_VALUE, 0, 100);
-  m_nCCTValue = cct_dimmer;
+	uint32_t now = millis();
+	UC cct_dimmer = map(_value, CT_MIN_VALUE, CT_MAX_VALUE, 0, 100);
+	if(now - m_nLastOpPast > 2000)
+	{
+		m_nCCTValue = cct_dimmer;
+		LOGD(LOGTAG_EVENT, "Update cct to %d", cct_dimmer);
+	}
+	else
+	{
+		LOGD(LOGTAG_EVENT, "ingore update cct to %d", cct_dimmer);
+	}
 }
 
 uint8_t xlPanelClass::GetButtonStatus()
@@ -234,8 +259,9 @@ uint8_t xlPanelClass::GetButtonStatus()
 // Change LED ring
 bool xlPanelClass::SetHC595()
 {
+  //SERIAL_LN("SetHC595 ... ");
   if( !m_pHC595 ) return false;
-
+  if(theConfig.GetDisableLamp()) return false;
   uint8_t pos;
   if( GetCCTFlag() ) {
     // Change dimmer value to LED ring position
@@ -266,6 +292,7 @@ bool xlPanelClass::GetRingOnOff()
 
 void xlPanelClass::SetRingOnOff(bool _switch)
 {
+  //LOGD(LOGTAG_EVENT, "SetRingOnOff to %d", _switch);
   if( !m_pHC595 ) return;
   uint8_t pos;
   if( GetCCTFlag() ) {
@@ -274,6 +301,10 @@ void xlPanelClass::SetRingOnOff(bool _switch)
     pos = (_switch ? map(m_nDimmerValue, 0, 100, 0, PANEL_NUM_LEDS_RING) : 0);
   }
   m_stSwitch = _switch;
+  if(theConfig.GetDisableLamp())
+  {
+    pos = theConfig.GetKeyOnNum()*12/MAX_KEY_MAP_ITEMS;
+  }
   SetRingPos(pos);
 }
 

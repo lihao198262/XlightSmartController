@@ -24,6 +24,7 @@ void RF24::csn(bool mode)
   // Was 4Mhz on Arduino
   SPI.setClockDivider(SPI_CLOCK_DIV16); // 4.5Mhz (if using <= 2mbps data rate)
   //SPI.setClockDivider(SPI_CLOCK_DIV32); // 2.25Mhz (if using <= 1mbps data rate)
+  //SPI.setClockSpeed(500, KHZ);
 
   digitalWrite(csn_pin,mode);
 	delayMicroseconds(5);
@@ -348,10 +349,10 @@ void RF24::printDetails(void)
   print_byte_register("CONFIG\t",CONFIG);
   print_byte_register("DYNPD/FEATURE",DYNPD,2);
 
-  SERIAL("Data Rate\t = %s\r\n",pgm_read_word(&rf24_datarate_e_str_P[getDataRate()]));
-  SERIAL("Model\t\t = %s\r\n",pgm_read_word(&rf24_model_e_str_P[isPVariant()]));
-  SERIAL("CRC Length\t = %s\r\n",pgm_read_word(&rf24_crclength_e_str_P[getCRCLength()]));
-  SERIAL("PA Power\t = %s\r\n",pgm_read_word(&rf24_pa_dbm_e_str_P[getPALevel()]));
+  SERIAL("Data Rate\t = %s\r\n",rf24_datarate_e_str_P[getDataRate()]);
+  SERIAL("Model\t\t = %s\r\n",rf24_model_e_str_P[isPVariant()]);
+  SERIAL("CRC Length\t = %s\r\n",rf24_crclength_e_str_P[getCRCLength()]);
+  SERIAL("PA Power\t = %s\r\n",rf24_pa_dbm_e_str_P[getPALevel()]);
 
 }
 /****************************************************************************/
@@ -1170,12 +1171,12 @@ bool RF24::testRPD(void)
 void RF24::setPALevel(uint8_t level)
 {
 
-  uint8_t setup = read_register(RF_SETUP) & 0b11111001;
+  uint8_t setup = read_register(RF_SETUP) & 0b11111000; // 0b11111001
 
   if(level > 3){  						// If invalid level, go to max PA
-	  level = (RF24_PA_MAX << 1) + 1;		// +1 to support the SI24R1 chip extra bit
+	  level = (RF24_PA_MAX << 1); //+ 1;		// +1 to support the SI24R1 chip extra bit
   }else{
-	  level = (level << 1) + 1;	 		// Else set level as requested
+	  level = (level << 1); //+ 1;	 		// Else set level as requested
   }
 
   write_register( RF_SETUP, setup |= level ) ;	// Write it to the chip

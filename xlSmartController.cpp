@@ -105,6 +105,7 @@ SmartControllerClass::SmartControllerClass()
 	m_loopKeyCode = 0;
 	m_tickLoopKeyCode = 0;
 	m_relaykeyflag = 0x00;
+	memset(m_mac,0,sizeof(m_mac));
 }
 
 // Primitive initialization before loading configuration
@@ -219,6 +220,7 @@ void SmartControllerClass::InitPins()
 #ifdef DISABLE_ASR
 #ifdef PIN_SOFT_KEY_1
 	pinMode(PIN_SOFT_KEY_1, OUTPUT);
+	//pinSetFast(PIN_SOFT_KEY_1);
 #endif
 #ifdef PIN_SOFT_KEY_4
 	pinMode(PIN_SOFT_KEY_4, OUTPUT);
@@ -308,7 +310,7 @@ BOOL SmartControllerClass::Start()
 
 	FindCurrentDevice();
 
-	LOGI(LOGTAG_MSG, "SmartController started.");
+	LOGN(LOGTAG_MSG, "SmartController started.");
 	LOGI(LOGTAG_MSG, "Product Info: %s-%s-%d",
 			theConfig.GetOrganization().c_str(), theConfig.GetProductName().c_str(), theConfig.GetVersion());
 	LOGI(LOGTAG_MSG, "System Info: %s-%s",
@@ -380,6 +382,16 @@ BOOL SmartControllerClass::SetStatus(UC st)
 	return true;
 }
 
+void SmartControllerClass::GetMac(uint8_t *mac)
+{
+	memcpy(mac,m_mac,sizeof(m_mac));
+}
+
+void SmartControllerClass::SetMac(uint8_t *mac)
+{
+	memcpy(m_mac,mac,sizeof(m_mac));
+}
+
 // Connect to the Cloud
 BOOL SmartControllerClass::connectCloud()
 {
@@ -397,6 +409,8 @@ BOOL SmartControllerClass::connectCloud()
 // Connect Wi-Fi
 BOOL SmartControllerClass::connectWiFi()
 {
+	if( theConfig.GetDisableWiFi() ) return false;
+
 	BOOL retVal = WiFi.ready();
 	if( !retVal ) {
 		if( WiFi.hasCredentials() ) {
@@ -435,6 +449,8 @@ BOOL SmartControllerClass::CheckRF()
 // Check Wi-Fi module and connection
 BOOL SmartControllerClass::CheckWiFi()
 {
+	if( theConfig.GetDisableWiFi() ) return false;
+
 	if( WiFi.RSSI() > 0 ) {
 		m_isWAN = false;
 		m_isLAN = false;
@@ -500,7 +516,9 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 	}
 
 	// Publish relay key status if changed
-	PublishRelayKeyFlag();
+	if( !theConfig.GetDisableWiFi() ) {
+		if( Particle.connected() ) PublishRelayKeyFlag();
+	}
 
   // Slow Checking: once per 60 seconds
   if (++tickCheckRadio > 60000 / ms) {
@@ -521,44 +539,46 @@ BOOL SmartControllerClass::SelfCheck(US ms)
 		}
 
 		// Check Network
-		if( theConfig.GetWiFiStatus() ) {
-			if( !IsWANGood() || tickAcitveCheck % 5 == 0 || GetStatus() == STATUS_DIS ) {
-				InitNetwork();
-			}
-
-			if( IsWANGood() ) { // WLAN is good
-				tickWiFiOff = 0;
-				if( !Particle.connected() ) {
-					// Cloud disconnected, try to recover
-					if( theConfig.GetUseCloud() != CLOUD_DISABLE ) {
-						connectCloud();
-					}
-				} else {
-					if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
-						Particle.disconnect();
-					}
+		if( !theConfig.GetDisableWiFi() ) {
+			if( theConfig.GetWiFiStatus() ) {
+				if( !IsWANGood() || tickAcitveCheck % 5 == 0 || GetStatus() == STATUS_DIS ) {
+					InitNetwork();
 				}
-			} else { // WLAN is wrong
-				if( ++tickWiFiOff > 5 ) {
-					theConfig.SetWiFiStatus(false);
-					if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
-						SERIAL_LN("System is about to reset due to lost of network...");
-						Restart();
+
+				if( IsWANGood() ) { // WLAN is good
+					tickWiFiOff = 0;
+					if( !Particle.connected() ) {
+						// Cloud disconnected, try to recover
+						if( theConfig.GetUseCloud() != CLOUD_DISABLE ) {
+							connectCloud();
+						}
 					} else {
-						// Avoid keeping trying
-						LOGE(LOGTAG_MSG, "Turn off WiFi!");
-						WiFi.disconnect();
-						WiFi.off();	// In order to resume Wi-Fi, restart the application
+						if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
+							Particle.disconnect();
+						}
+					}
+				} else { // WLAN is wrong
+					if( ++tickWiFiOff > 5 ) {
+						theConfig.SetWiFiStatus(false);
+						if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
+							SERIAL_LN("System is about to reset due to lost of network...");
+							Restart();
+						} else {
+							// Avoid keeping trying
+							LOGE(LOGTAG_MSG, "Turn off WiFi!");
+							WiFi.disconnect();
+							WiFi.off();	// In order to resume Wi-Fi, restart the application
+						}
 					}
 				}
+			} else if( WiFi.ready() ) {
+				theConfig.SetWiFiStatus(true);
 			}
-		} else if( WiFi.ready() ) {
-			theConfig.SetWiFiStatus(true);
-		}
 
-		// Daily Cloud Synchronization
-		/// TimeSync
-		theConfig.CloudTimeSync(false);
+			// Daily Cloud Synchronization
+			/// TimeSync
+			theConfig.CloudTimeSync(false);
+		}
   }
 
 	// Check System Status
@@ -613,13 +633,19 @@ BOOL SmartControllerClass::IsWANGood()
 // Process Local bridge commands
 void SmartControllerClass::ProcessLocalCommands() {
 	// Check RF Message
+	//SERIAL_LN("PeekMessage...");
 	theRadio.PeekMessage();
+	//SERIAL_LN("PeekMessage end");
 
 	// Process RF2.4 messages
+	//SERIAL_LN("ProcessMQ...");
 	theRadio.ProcessMQ();
+	//SERIAL_LN("ProcessMQ end");
 
 	// Process Console Command
+	//SERIAL_LN("processCommand...");
   theConsole.processCommand();
+  //SERIAL_LN("processCommand end");
 
 #ifndef DISABLE_BLE
 	// Process BLE commands
@@ -840,6 +866,7 @@ bool SmartControllerClass::MakeSureHardSwitchOn(UC dev, const UC subID)
 			}
 		}
 	}
+	if(theConfig.GetDisableLamp()) thePanel.SetRingOnOff(true);
 	return true;
 }
 
@@ -916,7 +943,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 {
   bool rc = FALSE;
 	UC keyID = 0;
-
+  //LOGD(LOGTAG_MSG, "relay set key=%d,onoff=%d",_key,_on);
   if( _key >= '1' && _key <= '8' ) keyID = _key - '0';
 	else if( _key >= 1 && _key <= 8 ) keyID = _key;
 
@@ -925,6 +952,7 @@ bool SmartControllerClass::relay_set_key(UC _key, bool _on)
 #ifdef PIN_SOFT_KEY_1
 		// Trigger Relay PIN
 		digitalWrite(PIN_SOFT_KEY_1, _on ? HIGH : LOW);
+		//digitalWrite(PIN_SOFT_KEY_1, _on ? LOW : HIGH);
 		// Update bitmap
 		SetRelayKeyFlag(keyID - 1, _on);
 		rc = TRUE;
@@ -2107,8 +2135,8 @@ bool SmartControllerClass::Check_SensorData(UC _thisNd, UC _scope, UC _sr, UC _n
 			senData = m_smoke.data;
 		} else if( _sr == sensorGAS && _nd == m_gas.node_id ) {
 			senData = m_gas.data;
-		} else if( _sr == sensorDUST && _nd == m_dust.node_id ) {
-			senData = m_dust.data;
+		} else if( _sr == sensorDUST && _nd == m_pm25.node_id ) {
+			senData = m_pm25.data;
 		}
 		break;
 
@@ -2597,8 +2625,10 @@ UC SmartControllerClass::GetDevOnOff(UC _nodeID)
  	}
 	if (DevStatusRowPtr) {
 		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? DEVICE_SW_OFF : DevStatusRowPtr->data.ring[0].State);
+		//LOGW(LOGTAG_MSG, "Find dev node:%d success,st:%d", _nodeID,_st);
 	} else {
 		_st = thePanel.GetRingOnOff() ? DEVICE_SW_ON : DEVICE_SW_OFF;
+		//LOGW(LOGTAG_MSG, "Find dev node:%d fail,st:%d", _nodeID,_st);
 	}
 	return _st;
 }
@@ -2716,6 +2746,7 @@ BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID, const UC subID)
 	if (DevStatusRowPtr) {
 		_st = (DevStatusRowPtr->data.ring[0].BR < BR_MIN_VALUE ? true : !DevStatusRowPtr->data.ring[0].State);
 	} else {
+		//LOGD(LOGTAG_MSG, "ring=%d",thePanel.GetRingOnOff());
 		_st = thePanel.GetRingOnOff() ? DEVICE_SW_OFF : DEVICE_SW_ON;
 	}
 
@@ -2731,7 +2762,6 @@ BOOL SmartControllerClass::ToggleLampOnOff(UC _nodeID, const UC subID)
 BOOL SmartControllerClass::ChangeLampBrightness(UC _nodeID, UC _percentage, const UC subID)
 {
 	MakeSureHardSwitchOn(_nodeID, subID);
-
 	BOOL rc = false;
 	//ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	//if (!DevStatusRowPtr) {
@@ -2864,13 +2894,16 @@ BOOL SmartControllerClass::ConfirmLampOnOff(UC _nodeID, UC _st)
 
 BOOL SmartControllerClass::ConfirmLampBrightness(UC _nodeID, UC _st, UC _percentage, UC _ringID)
 {
+	//LOGW(LOGTAG_MSG, "ConfirmLampBrightness node:%d st:%d,br:%d", _nodeID, _st,_percentage);
 	BOOL rc = false;
 	UC r_index = (_ringID == RING_ID_ALL ? 0 : _ringID - 1);
 	//m_pMainDev->data.ring[0].BR = _percentage;
 	ListNode<DevStatusRow_t> *DevStatusRowPtr = SearchDevStatus(_nodeID);
 	if (DevStatusRowPtr) {
+		//LOGW(LOGTAG_MSG, "find node ptr", _nodeID, _st,_percentage);
 		ConfirmLampPresent(DevStatusRowPtr, true);
 		if( DevStatusRowPtr->data.ring[r_index].State != _st || DevStatusRowPtr->data.ring[r_index].BR != _percentage ) {
+			//LOGW(LOGTAG_MSG, "set node:%d st:%d,br:%d", _nodeID, _st,_percentage);
 			DevStatusRowPtr->data.present = 1;
 			DevStatusRowPtr->data.ring[r_index].State = _st;
 			DevStatusRowPtr->data.ring[r_index].BR = _percentage;

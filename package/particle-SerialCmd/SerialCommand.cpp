@@ -146,7 +146,7 @@ bool SerialCommand::scanStateMachine()
 
 	  // Compare the found event against the list of known events in the same state for a match
 		if (strlen(CommandList[i].event) == 0 ||
-		    strnicmp(token, CommandList[i].event, SERIALCOMMANDBUFFER) == 0)
+		    wal_strnicmp(token, CommandList[i].event, SERIALCOMMANDBUFFER) == 0)
 		{
 			currentCommand = i;
 			matched = true;

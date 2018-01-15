@@ -4,6 +4,28 @@
 //--------------------------------------------------
 // Tools & Helpers
 //--------------------------------------------------
+int wal_stricmp(const char *a, const char *b) {
+  uint8_t ca, cb;
+  do {
+     ca = (unsigned char) *a++;
+     cb = (unsigned char) *b++;
+     ca = toupper(ca);
+     cb = toupper(cb);
+   } while (ca == cb && ca != '\0');
+   return (int)(ca - cb);
+}
+
+int wal_strnicmp(const char *a, const char *b, uint8_t len) {
+  uint8_t ca, cb,	i = 0;
+  do {
+     ca = (unsigned char) *a++;
+     cb = (unsigned char) *b++;
+     ca = toupper(ca);
+     cb = toupper(cb);
+   } while (ca == cb && ca != '\0' && ++i < len );
+   return (int)(ca - cb);
+}
+
 uint8_t h2i(const char c)
 {
 	uint8_t i = 0;

@@ -11,8 +11,6 @@
 // Comment it off if we don't use Particle public cloud
 /// Notes:
 /// Currently, Particle public cloud supports up to 20 variables and 15 functions.
-/// In general situation, we should use publish/subscribe or MQTT.
-#define USE_PARTICLE_CLOUD
 
 // Notes: Variable name max length is 12 characters long.
 // Cloud variables
@@ -100,10 +98,14 @@ public:
   nd_uc_t m_motion;
   nd_uc_t m_irKey;
   nd_us_t m_gas;
-  nd_us_t m_dust;
   nd_us_t m_smoke;
   nd_uc_t m_sound;
   nd_us_t m_noise;
+  nd_us_t m_pm25;
+  nd_us_t m_pm10;
+  nd_float_t m_tvoc;
+  nd_float_t m_ch2o;
+  nd_us_t m_co2;
 
 public:
   CloudObjClass();
@@ -117,7 +119,7 @@ public:
   virtual int CldPowerSwitch(String swStr) = 0;
   virtual int CldSetCurrentTime(String tmStr) = 0;
   virtual void OnSensorDataChanged(const UC _sr, const UC _nd) = 0;
-  int ProcessJSONString(String inStr);
+  int ProcessJSONString(const String& inStr);
 
   BOOL UpdateDHT(uint8_t nid, float _temp, float _humi);
   BOOL UpdateBrightness(uint8_t nid, uint8_t value);
@@ -127,6 +129,7 @@ public:
   BOOL UpdateSmoke(uint8_t nid, uint16_t value);
   BOOL UpdateSound(uint8_t nid, uint8_t value);
   BOOL UpdateNoise(uint8_t nid, uint16_t value);
+  BOOL UpdateAirQuality(uint8_t nid, uint16_t pm25,uint16_t pm10,float tvoc,float ch2o,uint16_t co2);
 
   BOOL PublishLog(const char *msg);
   BOOL PublishDeviceStatus(const char *msg);
@@ -138,7 +141,7 @@ protected:
   void InitCloudObj();
 
   JsonObject *m_jpCldCmd;
-	
+
   LinkedList<String> m_cmdList;
   LinkedList<String> m_configList;
 };

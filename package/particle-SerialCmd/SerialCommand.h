@@ -52,15 +52,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SERIALCOMMAND_HARDWAREONLY 1
 //#undef SERIALCOMMAND_HARDWAREONLY
 
-#ifdef SERIALCOMMAND_HARDWAREONLY
-#warning "Warning: Building SerialCommand without SoftwareSerial Support"
-#endif
+//#ifdef SERIALCOMMAND_HARDWAREONLY
+//#warning "Warning: Building SerialCommand without SoftwareSerial Support"
+//#endif
 
 #ifndef SERIALCOMMAND_HARDWAREONLY
 #include <SoftwareSerial.h>
 #endif
 
-#define SERIALCOMMANDBUFFER 32          // Maximum length of a command
+#define SERIALCOMMANDBUFFER (uint8_t)32          // Maximum length of a command
 #define MAXDELIMETER 2
 
 typedef bool (*PFunc) (const char *cmd);

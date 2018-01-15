@@ -14,10 +14,11 @@ public:
   CFastMessageNode *m_pNext;
   CFastMessageNode *m_pPrev;
   uint8_t m_Tag;
+  uint32_t m_iFlag;           // Message flag
 
-  void WriteMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag = 0);
-  uint8_t ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag = NULL, uint8_t f_10ms = 0);
-  bool CompareMessage(const uint8_t *f_data, uint8_t f_len);
+  void WriteMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag = 0,  uint32_t f_flag = 0);
+  uint8_t ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag = NULL, uint32_t *f_flag = NULL, uint8_t f_10ms = 0);
+  uint8_t CompareMessage(const uint8_t *f_data, uint8_t f_len, uint32_t f_flag = 0);
   void ClearMessage();
 
 private:
@@ -34,7 +35,7 @@ public:
 	void RemoveAllMessage();
 	bool RemoveMessage(CFastMessageNode *pNode = NULL);
 	CFastMessageNode *GetMessage(CFastMessageNode *pNode = NULL);
-	uint8_t AddMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag = 0);
+	uint8_t AddMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag = 0,  uint32_t f_flag = 0);
 	uint8_t GetMQLength();
 	uint8_t GetMQMaxLength();
 

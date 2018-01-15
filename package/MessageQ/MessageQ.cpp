@@ -48,6 +48,7 @@ CFastMessageNode::CFastMessageNode(uint8_t f_iSize)
 	m_pPrev = NULL;
 	m_pNext = NULL;
 	m_Tag = 0;
+	m_iFlag = 0;
   m_iRepeatTimes = 0;
   m_tickLastRead = 0;
 }
@@ -58,18 +59,19 @@ CFastMessageNode::~CFastMessageNode()
 		delete[] m_pData;
 }
 
-void CFastMessageNode::WriteMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag)
+void CFastMessageNode::WriteMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag, uint32_t f_flag)
 {
 	uint8_t lv_len = min(f_len, m_nSize);
 	if( lv_len > 0 )
 		memcpy( m_pData, f_data, lv_len );
 	m_nLen = lv_len;
 	m_Tag = f_Tag;
+  m_iFlag = f_flag;
   m_iRepeatTimes = 0;
   m_tickLastRead = 0;
 }
 
-uint8_t CFastMessageNode::ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag, uint8_t f_10ms)
+uint8_t CFastMessageNode::ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_t *f_Tag,uint32_t *f_flag, uint8_t f_10ms)
 {
   uint32_t ticknow = millis();
   if(ticknow - m_tickLastRead <= f_10ms * 10) return 0;
@@ -78,16 +80,22 @@ uint8_t CFastMessageNode::ReadMessage(uint8_t *f_data, uint8_t *f_repeat, uint8_
   m_tickLastRead = ticknow;
   if( f_repeat ) *f_repeat = m_iRepeatTimes;
   if( f_Tag )	*f_Tag = m_Tag;
+  if( f_flag )  *f_flag = m_iFlag;
   if( m_nLen > 0 )
     memcpy(f_data, m_pData, m_nLen);
 	return m_nLen;
 }
 
 // return true if messages are identical
-bool CFastMessageNode::CompareMessage(const uint8_t *f_data, uint8_t f_len)
+uint8_t CFastMessageNode::CompareMessage(const uint8_t *f_data, uint8_t f_len, uint32_t f_flag)
 {
-  if(f_len != m_nLen) return false;
-  return(memcmp(f_data, m_pData, m_nLen) == 0);
+  // content is the very same
+  if(f_len == m_nLen && (memcmp(f_data, m_pData, m_nLen) == 0)) return 1;
+  // same type message
+  if(m_iFlag == f_flag) return 2;
+  return 0;
+  //if(f_len != m_nLen) return false;
+  //return(memcmp(f_data, m_pData, m_nLen) == 0);
 }
 
 void CFastMessageNode::ClearMessage()
@@ -161,34 +169,41 @@ uint8_t CFastMessageQ::GetMQMaxLength()
 }
 
 // Add message at the end of queue
-uint8_t CFastMessageQ::AddMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag)
+uint8_t CFastMessageQ::AddMessage(const uint8_t *f_data, uint8_t f_len, uint8_t f_Tag, uint32_t f_flag)
 {
   if( GetLock(20) ) return 0;
 
   uint8_t lv_retVal = 0;
-
+  uint8_t cmpRet = 0;
   // Lock Queue
 	LockQueue();
+	
 
   if( !m_bDupMsg ) {
     // Skip duplicated message
     CFastMessageNode *lv_pNode = m_pQHead;
     while( lv_pNode != NULL && lv_pNode != m_pQTail )
     {
-      if( lv_pNode->CompareMessage(f_data, f_len) )
+	  cmpRet  = lv_pNode->CompareMessage(f_data, f_len, f_flag);
+      if( cmpRet > 0)
       {
-        // Same message
+		    Serial.printlnf("same type message %d",f_flag);
+        // Same type message
         lv_retVal = m_iQLength;
+		    if(cmpRet == 2)
+		    { // need update message content
+          lv_pNode->WriteMessage(f_data, f_len, lv_pNode->m_Tag,f_flag);
+		    }
         break;
       }
       lv_pNode = lv_pNode->m_pNext;
     }
   }
 
-	if( m_iQLength < m_iMaxQLength && lv_retVal == 0 )
+	if( m_iQLength < m_iMaxQLength && lv_retVal == 0 && cmpRet == 0)
 	{
 		// Set Data
-		m_pQTail->WriteMessage(f_data, f_len, f_Tag);
+		m_pQTail->WriteMessage(f_data, f_len, f_Tag,f_flag);
 		m_pQTail = m_pQTail->m_pNext;
 		m_iQLength++;
 		lv_retVal = m_iQLength;
@@ -231,6 +246,10 @@ bool CFastMessageQ::RemoveMessage(CFastMessageNode *pNode)
 	if( pNode == NULL ) pNode = m_pQHead;
   if( pNode != m_pQTail && m_iQLength > 0 ) {
     pNode->ClearMessage();
+	if(pNode == m_pQHead)
+	{
+		m_pQHead = pNode->m_pNext;
+	}
     // Rearrange node chain
     pNode->m_pPrev->m_pNext = pNode->m_pNext;
     pNode->m_pNext->m_pPrev = pNode->m_pPrev;

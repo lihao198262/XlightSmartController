@@ -80,33 +80,36 @@ void SysteTimerCB()
   	theSys.FastProcess();
 	}
 
-	// Timeout interuption of Cloud connecting
+	//if( !theConfig.GetDisableWiFi() ) {
+		// Timeout interuption of Cloud connecting
 //#ifndef SYS_SERIAL_DEBUG
-	if( WiFi.listening() ) {
-		if (++slowTick > RTE_DELAY_SYSTIMER) {
-			slowTick = 0;
-			//SERIAL_LN("Wi-Fi in listening mode...");
-			// Get Wi-Fi credential from BLE
-			theSys.ProcessLocalCommands();
-			/*if( WiFi.hasCredentials() ) {
-				//WiFi.listen(false);
-				//theSys.ResetSerialPort();
-				SERIAL_LN("will connect Wi-Fi in system thread");
-				//theSys.connectWiFi();
+		//if( WiFi.listening() ) {
+			/*if (++slowTick > RTE_TICK_SLOWPROCESS) {
+				slowTick = 0;
+				//SERIAL_LN("Wi-Fi in listening mode...");
+				// Get Wi-Fi credential from BLE
+				//SERIAL_LN("ProcessLocalCommands ...");
+				//theSys.ProcessLocalCommands();
+				//SERIAL_LN("ProcessLocalCommands end");
+				if( WiFi.hasCredentials() ) {
+					//WiFi.listen(false);
+					//theSys.ResetSerialPort();
+					SERIAL_LN("will connect Wi-Fi in system thread");
+					//theSys.connectWiFi();
+				}
 			}*/
-		}
-		// Reset?
-	}
+			// Reset?
+		//}
 //#endif
+	//}
 }
 
 // Set "manual" mode
 SYSTEM_MODE(MANUAL);
 SYSTEM_THREAD(ENABLED);
-
+//
 void setup()
 {
-	// Open Wi-Fi
 	WiFi.on();
 	WiFi.listen(false);
 
@@ -116,63 +119,70 @@ void setup()
   // Load Configuration
   theConfig.LoadConfig();
 
-	// Initiaze Cloud Variables & Functions
-	///It is fine to call this function when the cloud is disconnected - Objects will be registered next time the cloud is connected
-  theSys.InitCloudObj();
-
-  // Initialize Pins
+	// Initialize Pins
   theSys.InitPins();
 
 	// Initialization Radio Interfaces
 	theSys.InitRadio();
 
+	// Open Wi-Fi
+	if( theConfig.GetDisableWiFi() ) {
+		WiFi.disconnect();
+		WiFi.off();
+	} else {
+		// Initiaze Cloud Variables & Functions
+		///It is fine to call this function when the cloud is disconnected - Objects will be registered next time the cloud is connected
+	  theSys.InitCloudObj();
+	}
+
 	// Initialize Serial Console
   theConsole.Init();
-
   // Start system timer: callback every n * 0.5ms using hmSec timescale
   //Use TIMER6 to retain PWM capabilities on all pins
   sysTimer.begin(SysteTimerCB, RTE_DELAY_SYSTIMER, hmSec, TIMER6);
 
-	while(1) {
-		if( !WiFi.hasCredentials() || !theConfig.GetWiFiStatus() ) {
-			if( !theSys.connectWiFi() ) {
-				// get credential from BLE or Serial
-				SERIAL_LN("will enter listening mode");
-				WiFi.listen();
-				break;
-			}
-		}
-
-		// Connect to Wi-Fi
-		SERIAL_LN("will connect WiFi");
-		if( theSys.connectWiFi() ) {
-			if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
-				Particle.disconnect();
-			} else {
-				// Connect to the Cloud
-				if( !theSys.connectCloud() ) {
-					if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
-						// Must connect to the Cloud
-						continue;
-					}
+	if( !theConfig.GetDisableWiFi() ) {
+		while(1) {
+			if( !WiFi.hasCredentials() || !theConfig.GetWiFiStatus() ) {
+				if( !theSys.connectWiFi() ) {
+					// get credential from BLE or Serial
+					SERIAL_LN("will enter listening mode");
+					WiFi.listen();
+					break;
 				}
 			}
-		} else {
-			if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
-				// Must have network
-				continue;
+
+			// Connect to Wi-Fi
+			SERIAL_LN("will connect WiFi");
+			if( theSys.connectWiFi() ) {
+				if( theConfig.GetUseCloud() == CLOUD_DISABLE ) {
+					Particle.disconnect();
+				} else {
+					// Connect to the Cloud
+					if( !theSys.connectCloud() ) {
+						if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
+							// Must connect to the Cloud
+							continue;
+						}
+					}
+				}
+			} else {
+				if( theConfig.GetUseCloud() == CLOUD_MUST_CONNECT ) {
+					// Must have network
+					continue;
+				}
 			}
+			break;
 		}
-		break;
-	}
 
-  // Initialization network Interfaces
-  theSys.InitNetwork();
+	  // Initialization network Interfaces
+	  theSys.InitNetwork();
 
-	// Wait the system started
-	if( Particle.connected() == true ) {
-		while( millis() < 2000 ) {
-			Particle.process();
+		// Wait the system started
+		if( Particle.connected() == true ) {
+			while( millis() < 2000 ) {
+				Particle.process();
+			}
 		}
 	}
 
@@ -217,11 +227,13 @@ void loop()
 
   // Self-test & alarm trigger, also insert delay between each loop
   IF_MAINLOOP_TIMER( theSys.SelfCheck(RTE_DELAY_SELFCHECK), "SelfCheck" );
-
-	// Process Could Messages
-  if( Particle.connected() == true ) {
-    IF_MAINLOOP_TIMER( Particle.process(), "ProcessCloud" );
-  }
+	//if( !theConfig.GetDisableWiFi() ) {
+		// Process Could Messages
+	  //if( Particle.connected() == true ) {
+	    IF_MAINLOOP_TIMER( Particle.process(), "ProcessCloud" );
+	  //}
+	//}
+	//wd.checkin();
 }
 
 #endif

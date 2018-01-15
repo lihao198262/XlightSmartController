@@ -434,8 +434,10 @@ BOOL BLEInterfaceClass::exectueCommand(char *inputString)
                 strCmd = String::format("%d;0;3;2;6;1:0:%s\n", NODEID_SMARTPHONE, theSys.GetSysID().c_str());
                 sendCommand(strCmd);
 
-                WiFi.listen(false);
-                theSys.connectWiFi();
+                if( !theConfig.GetDisableWiFi() ) {
+                  WiFi.listen(false);
+                  theSys.connectWiFi();
+                }
               }
             } else {
               strCmd = String::format("%d;0;3;2;6;0:0\n", NODEID_SMARTPHONE);

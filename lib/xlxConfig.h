@@ -96,14 +96,16 @@ typedef struct
   BOOL enHWSwitch             :1;           // Whether use Hardware Switch as default
   UC hwsObj                   :3;           // Hardware Switch Object
   UC useCloud                 :2;           // How to depend on the Cloud
-  BOOL Reserved_bool          :1;           // Reserved for boolean flags
+  BOOL disableWiFi            :1;           // Disable Wi-Fi Chip
   US sensorBitmap             :16;          // Sensor enable bitmap
   UC numDevices               :8;           // Number of devices
   UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
   Timezone_t timeZone;                      // Time zone
   US maxBaseNetworkDuration;
   UC tmLoopKC;                              // Loop Keycode timeout
-  UC Reserved_UC1[2];
+  BOOL disableLamp            :1;           // if disable lamp
+  UC reserved                 :7;           // reserved
+  UC Reserved_UC1[1];
   char bleName[24];
   char blePin[6];
   char pptAccessCode[8];
@@ -137,7 +139,8 @@ typedef struct
   BOOL enableSpeaker          :1;           // Whether enable speaker
   BOOL fixedNID               :1;           // Whether fixed Node ID
   UC rfDataRate               :2;           // RF Data Rate [0..2], 0 for 1Mbps, or 1 for 2Mbps, 2 for 250kbs
-  BOOL Reserved_bool          :2;           // Reserved for boolean flags
+  BOOL disableWiFi            :1;           // Disable Wi-Fi Chip
+  BOOL Reserved_bool          :1;           // Reserved for boolean flags
   UC numNodes;                              // Number of Nodes (include device, remote control, etc.)
   UC rfPowerLevel             :2;           // RF Power Level 0..3
   BOOL stWiFi                 :1;           // Wi-Fi status: On / Off
@@ -400,6 +403,10 @@ public:
   ConfigClass();
   void InitConfig();
   BOOL InitDevStatus(UC nodeID);
+  Flashee::FlashDevice* getP1Flash()
+  {
+	  return P1Flash;
+  }
 
   // write to P1 using spark-flashee-eeprom
   BOOL MemWriteScenarioRow(ScenarioRow_t row, uint32_t address);
@@ -408,6 +415,10 @@ public:
   BOOL LoadConfig();
   BOOL SaveConfig();
   BOOL IsConfigLoaded();
+  
+  BOOL IsValidConfig();
+  BOOL LoadBackupConfig();
+  BOOL SaveBackupConfig();
 
   BOOL LoadDeviceStatus();
   BOOL SaveDeviceStatus();
@@ -420,6 +431,7 @@ public:
 
   BOOL LoadNodeIDList();
   BOOL SaveNodeIDList();
+  BOOL LoadBackupNodeList();
 
   BOOL IsConfigChanged();
   void SetConfigChanged(BOOL flag);
@@ -514,6 +526,11 @@ public:
   US GetMaxBaseNetworkDur();
   BOOL SetMaxBaseNetworkDur(US dur);
 
+  BOOL GetDisableWiFi();
+  BOOL SetDisableWiFi(BOOL _st);
+  BOOL GetDisableLamp();
+  BOOL SetDisableLamp(BOOL _st);
+
   UC GetUseCloud();
   BOOL SetUseCloud(UC opt);
 
@@ -559,6 +576,7 @@ public:
   BOOL IsKeyMapItemAvalaible(const UC _code);
   bool IsKeyMatchedItem(const UC _code, const UC _nid, const UC _subID = 0);
   void showKeyMap();
+  UC GetKeyOnNum();
 
   BOOL SetExtBtnAction(const UC _btn, const UC _opt, const UC _act, const UC _keymap);
   BOOL ExecuteBtnAction(const UC _btn, const UC _opt);

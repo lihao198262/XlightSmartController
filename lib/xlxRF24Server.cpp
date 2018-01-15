@@ -82,6 +82,7 @@ uint64_t RF24ServerClass::GetNetworkID(bool _full)
 
   byte mac[6];
   WiFi.macAddress(mac);
+  theSys.SetMac((uint8_t*)mac);
 	int i = (_full ? 0 : 2);
   for (; i<6; i++) {
     netID += mac[i];
@@ -324,40 +325,47 @@ bool RF24ServerClass::ProcessSend(String &strMsg, MyMessage &my_msg, const UC _r
 {
 	int nPos;
 	int nPos2;
-	uint8_t lv_nNodeID, lv_nSubID;
+	uint8_t lv_nNodeID = 0, lv_nSubID;
 	uint8_t lv_nMsgID;
 	String lv_sPayload = "";
 
 	// Get NodeId & subID
 	lv_nSubID = _sensor;
-	nPos = strMsg.indexOf('-');
-	if (nPos > 0) {
-		// May contain subID
-		lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
-		nPos2 = strMsg.indexOf(':', nPos + 1);
-		if (nPos2 > 0) {
-			lv_nSubID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
-			nPos = nPos2;
-		}
-	} else {
-		// Has no subID
-		nPos = strMsg.indexOf(':');
+	// send <message> or <NodeID:MessageId[:Payload]>
+	// check whether is <message> or <NodeID:MessageId[:Payload]>
+	if(strMsg.indexOf(':') > 0)
+	{
+		//LOGD(LOGTAG_MSG, "nomar msg: %s", strMsg);
+		nPos = strMsg.indexOf('-');
 		if (nPos > 0) {
+			// May contain subID
 			lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
+			nPos2 = strMsg.indexOf(':', nPos + 1);
+			if (nPos2 > 0) {
+				lv_nSubID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
+				nPos = nPos2;
+			}
+		} else {
+			// Has no subID
+			nPos = strMsg.indexOf(':');
+			if (nPos > 0) {
+				lv_nNodeID = (uint8_t)(strMsg.substring(0, nPos).toInt());
+			}
 		}
-	}
-
-	if (nPos > 0) {
-		// Extract MessageID
-		lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1).toInt());
-		nPos2 = strMsg.indexOf(':', nPos + 1);
-		if (nPos2 > 0) {
-			lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
-			lv_sPayload = strMsg.substring(nPos2 + 1);
+		if(nPos > 0)
+		{
+			// Extract MessageID
+			lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1).toInt());
+			nPos2 = strMsg.indexOf(':', nPos + 1);
+			if (nPos2 > 0) {
+				lv_nMsgID = (uint8_t)(strMsg.substring(nPos + 1, nPos2).toInt());
+				lv_sPayload = strMsg.substring(nPos2 + 1);
+			}
 		}
 	}
 	else {
 		// Parse serial message
+    //LOGD(LOGTAG_MSG, "serial msg: %s", strMsg);
 		lv_nMsgID = 0;
 		lv_sPayload = strMsg;
 	}
@@ -390,7 +398,10 @@ bool RF24ServerClass::ProcessSend(MyMessage *pMsg)
 	}
 
 	// Add message to sending MQ. Right now tag has no actual purpose (just for debug)
-	if( AddMessage((UC *)&(pMsg->msg), MAX_MESSAGE_LENGTH, GetMQLength()) > 0 ) {
+	uint32_t flag = 0;
+	flag = ((uint32_t)pMsg->getSensor()<<24) | ((uint32_t)pMsg->getCommand()<<16) | ((uint32_t)pMsg->getType()<<8) | (pMsg->getDestination());
+	//LOGD(LOGTAG_MSG, "flag=%d,d=%d,cmd=%d,type=%d,sensor=%d",flag,pMsg->getDestination(),pMsg->getCommand(),pMsg->getType(),pMsg->getSensor());
+	if( AddMessage((UC *)&(pMsg->msg), MAX_MESSAGE_LENGTH, GetMQLength(), flag) > 0 ) {
 		_times++;
 		//LOGD(LOGTAG_MSG, "Add sendMQ len:%d", GetMQLength());
 		return true;
@@ -570,9 +581,9 @@ bool RF24ServerClass::ProcessReceiveMQ()
 					}
 				} else if( msgType == I_REBOOT ) {
 					// Reboot node
+					transTo = msg.getDestination();
 					ListNode<DevStatusRow_t> *DevStatusRowPtr = theSys.SearchDevStatus(transTo);
 					if( DevStatusRowPtr ) {
-						transTo = msg.getDestination();
 						msg.build(replyTo, transTo, _sensor, C_INTERNAL, I_REBOOT, false);
 						msg.set((unsigned int)DevStatusRowPtr->data.token);
 						msgReady = true;
@@ -590,7 +601,8 @@ bool RF24ServerClass::ProcessReceiveMQ()
           }
 					else if( payload[0] == SCANNER_SETUPDEV_RF ) {
 						uint8_t mac[6] = {0};
-						WiFi.macAddress(mac);
+						//WiFi.macAddress(mac);
+						theSys.GetMac(mac);
 						if(isIdentityEqual(payload + 1,mac,sizeof(mac)))
 						  Process_SetupRF(payload + 1 + LEN_NODE_IDENTITY, payl_len - 1 - LEN_NODE_IDENTITY);
           }
@@ -658,7 +670,18 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							if( _sensor == S_DUST ) {
 								theSys.UpdateDust(replyTo, _iValue);
 							} else if( _sensor == S_AIR_QUALITY ) {
-								theSys.UpdateGas(replyTo, _iValue);
+								if(payl_len >= 10)
+								{
+								  US pm10 = payload[3] * 256 + payload[2];
+									float tvoc = (payload[5] * 256 + payload[4])/10.0;
+									float ch2o = (payload[7] * 256 + payload[6])/10.0;
+									US co2 = payload[9] * 256 + payload[8];
+									theSys.UpdateAirQuality(replyTo, _iValue,pm10,tvoc,ch2o,co2);
+								}
+								else
+								{
+									theSys.UpdateGas(replyTo, _iValue);
+								}
 							} else if( _sensor == S_SMOKE ) {
 								theSys.UpdateSmoke(replyTo, _iValue);
 							}
@@ -725,7 +748,7 @@ bool RF24ServerClass::ProcessReceiveMQ()
 							//bDataChanged = true;
 						} else if( msgType == V_RELAY_MAP ) {
 							// Publish Relay Status
-							strTemp = String::format("{'nd':%d,'km':%d}", replyTo, payload[0]);
+							strTemp = String::format("{'nd':%d,'subid':%d,'km':%d}", replyTo, _sensor,payload[0]);
 							theSys.PublishDeviceStatus(strTemp.c_str());
 							//bDataChanged = true;
 						}
@@ -774,7 +797,7 @@ bool RF24ServerClass::ProcessReceiveMQ()
 					if( transTo > 0 ) {
 						bool lv_skip = false;
 						// Remote turns on or set scene: make sure hardswitch is on
-						if( msgType == V_STATUS && !IS_NOT_REMOTE_NODEID(replyTo) ) {
+						if( msgType == V_STATUS ) { //&& !IS_NOT_REMOTE_NODEID(replyTo) ) {
 							if( theConfig.GetHardwareSwitch() ) {
 								_bValue = payload[0];
 								if( _bValue == DEVICE_SW_TOGGLE ) _bValue = 1 - theSys.GetDevOnOff(transTo);
@@ -820,14 +843,18 @@ bool RF24ServerClass::ProcessSendMQ()
 	MyMessage lv_msg;
 	UC *pData = (UC *)&(lv_msg.msg);
 	CFastMessageNode *pNode = NULL, *pOld;
-	UC pipe, _repeat, _tag;
-	bool _remove;
+	UC pipe, _repeat;
+	UC _tag = 0;
+	uint32_t _flag = 0;
+	bool _remove = false;
 
 	if( GetMQLength() > 0 ) {
 		while( pNode = GetMessage(pNode) ) {
 			pOld = pNode;
+			// Next node
+			pNode = pOld->m_pNext;
 			// Get message data
-			if( pNode->ReadMessage(pData, &_repeat, &_tag, 15) > 0 )
+			if( pOld->ReadMessage(pData, &_repeat, &_tag, &_flag,15) > 0 )
 			{
 				// Determine pipe
 				if( lv_msg.getCommand() == C_INTERNAL && lv_msg.getType() == I_ID_RESPONSE && lv_msg.isAck() ) {
@@ -853,12 +880,9 @@ bool RF24ServerClass::ProcessSendMQ()
 
 				// Remove message if succeeded or retried enough times
 				if( _remove ) {
-					RemoveMessage(pNode);
+					RemoveMessage(pOld);
 				}
 			}
-
-			// Next node
-			pNode = pOld->m_pNext;
 		}
 	}
 
@@ -876,7 +900,8 @@ bool RF24ServerClass::MsgScanner_ProbeAck()
 	uint8_t playdata[MAX_PAYLOAD + 1] = {0};
 	playdata[0] = SCANNER_PROBE;
 	uint8_t mac[6];
-  WiFi.macAddress(mac);
+    //WiFi.macAddress(mac);
+	theSys.GetMac(mac);
 	memcpy(playdata + 1, mac, sizeof(mac));
   playdata[payl_len++] = theConfig.GetVersion();
 	playdata[payl_len++] = XLIGHT_EDITION_ID; // type
